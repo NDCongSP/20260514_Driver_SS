@@ -2,19 +2,25 @@
 
   <!--
   ============================================================
-  Scale_IND_KG — Parser cân IND (format: "=0004.62(kg)")
+  Scale_IND_KG - Parser can IND don vi KG (format: "=0004.62(kg)")
   ============================================================
-  netstandard2.0: tương thích mọi .NET version
-  Dùng khi ScaleConfig.ModelName = "Scale_IND_KG"
+  netstandard2.0: tuong thich voi .NET Framework 4.7.2, .NET 6, .NET 8
+
+  Cach dung: ScanAndScale.Core tu dong load DLL nay tai runtime
+  qua Reflection khi ScaleConfig.ModelName = "Scale_IND_KG".
   ============================================================
   -->
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <AssemblyName>Scale_IND_KG</AssemblyName>
     <RootNamespace>Scale_IND_KG</RootNamespace>
-    <Description>Parser cân điện tử IND KG — forma
+    <Description>Parser can IND KG - format: =0004.62(kg)</Description>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+</Project>

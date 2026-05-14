@@ -2,19 +2,25 @@
 
   <!--
   ============================================================
-  Scale_Vibra_SJ6200 — Parser cân Vibra SJ-6200
+  Scale_Vibra_SJ6200 - Parser can Vibra SJ-6200
   ============================================================
-  netstandard2.0: tương thích mọi .NET version
-  Dùng khi ScaleConfig.ModelName = "Scale_Vibra_SJ6200"
+  netstandard2.0: tuong thich voi .NET Framework 4.7.2, .NET 6, .NET 8
+
+  Cach dung: ScanAndScale.Core tu dong load DLL nay tai runtime
+  qua Reflection khi ScaleConfig.ModelName = "Scale_Vibra_SJ6200".
   ============================================================
   -->
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <AssemblyName>Scale_Vibra_SJ6200</AssemblyName>
     <RootNamespace>Scale_Vibra_SJ6200</RootNamespace>
-    <Description>Parser cân Vibra SJ-6200</Descr
+    <Description>Parser can Vibra SJ-6200</Description>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+</Project>

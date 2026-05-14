@@ -2,19 +2,25 @@
 
   <!--
   ============================================================
-  Scale_SampleReading — Parser cân mẫu / Vibra
+  Scale_SampleReading - Parser can mau / test (Vibra generic)
   ============================================================
-  netstandard2.0: tương thích mọi .NET version
-  Dùng khi ScaleConfig.ModelName = "Scale_SampleReading"
+  netstandard2.0: tuong thich voi .NET Framework 4.7.2, .NET 6, .NET 8
+
+  Cach dung: ScanAndScale.Core tu dong load DLL nay tai runtime
+  qua Reflection khi ScaleConfig.ModelName = "Scale_SampleReading".
   ============================================================
   -->
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <AssemblyName>Scale_SampleReading</AssemblyName>
     <RootNamespace>Scale_SampleReading</RootNamespace>
-    <Description>Parser cân mẫu Vibra — 
+    <Description>Parser can mau Vibra - Vibra ST/US NT/GS format</Description>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+</Project>
