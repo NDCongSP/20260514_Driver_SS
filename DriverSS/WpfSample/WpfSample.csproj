@@ -7,21 +7,20 @@
   Target: net8.0-windows (WPF chi chay tren Windows)
   Pattern: MVVM (Model-View-ViewModel)
 
-  Sau khi build, thu muc bin\Debug\net8.0-windows\ se tu co:
+  Sau khi build, thu muc bin\Debug\net8.0-windows\ se co:
     WpfSample.exe
-    ScanAndScale.Core.dll
-    Scale_DIGI.dll          <- tu dong copy (khong can cau hinh gi them)
-    Scale_IND_KG.dll        <- tu dong copy
-    Scale_SampleReading.dll <- tu dong copy
-    Scale_Vibra_HAW30.dll   <- tu dong copy
-    Scale_Vibra_SJ6200.dll  <- tu dong copy
+    ScanAndScale.Core.dll   <- chua san Scale_*.dll da duoc nhung ben trong
 
-  Cach hoat dong:
-    ScanAndScale.Core co target IncludeScaleDllsForConsumers
-    (BeforeTargets="GetCopyToOutputDirectoryItems"). Target do query
-    duong dan DLL chinh xac tu tung Scale project va dang ky chung
-    la None item voi CopyToOutputDirectory=PreserveNewest.
-    MSBuild tu dong propagate cac item nay sang WpfSample khi build.
+  KHONG can cac file Scale_*.dll rieng le nua!
+  Scale_DIGI.dll, Scale_IND_KG.dll, ... da duoc nhung vao
+  ScanAndScale.Core.dll nhu EmbeddedResource khi build.
+
+  ScaleDriver tu dong load Scale DLL theo thu tu uu tien:
+    1. EmbeddedResource ben trong ScanAndScale.Core.dll  <- mac dinh
+    2. File Scale_*.dll tren disk (fallback)              <- neu deploy thu cong
+
+  Nen chi can ProjectReference den ScanAndScale.Core la du — khong can
+  them bat ky cau hinh hay target nao.
   ============================================================
   -->
 
@@ -36,9 +35,13 @@
   </PropertyGroup>
 
   <!--
-  Chi can khai bao ProjectReference den ScanAndScale.Core la du.
-  Scale_*.dll se tu dong xuat hien trong output nho target
-  IncludeScaleDllsForConsumers ben trong ScanAndScale.Core.
+  CHI CAN DONG NAY — khong can them target hay cau hinh gi them.
+
+  Cach hoat dong khi build:
+  1. MSBuild build ScanAndScale.Core truoc (do ProjectReference)
+  2. Target EmbedScaleDlls trong Core nhung Scale_*.dll vao Core.dll
+  3. WpfSample build va lay ScanAndScale.Core.dll (da co san Scale DLL ben trong)
+  4. Chay: ScaleDriver.Initialize() load Scale DLL tu EmbeddedResource
   -->
   <ItemGroup>
     <ProjectReference Include="..\ScanAndScale.Core\ScanAndScale.Core.csproj" />

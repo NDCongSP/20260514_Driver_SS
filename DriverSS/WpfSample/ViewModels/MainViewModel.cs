@@ -288,7 +288,8 @@ namespace WpfSample.ViewModels
             Port = 23,                 // Cổng Telnet của cân
             // Dùng ScaleModelNames thay cho string thô → tránh typo, IntelliSense hỗ trợ
             // Các lựa chọn: ScaleModelNames.DIGI, IND_KG, Vibra_SJ6200, Vibra_HAW30, SampleReading
-            ModelName = ScaleModelNames.DIGI, // Scale_DIGI.dll — tự build và copy vào output
+            // Scale_DIGI.dll đã được nhúng vào ScanAndScale.Core.dll — không cần file bên ngoài
+            ModelName = ScaleModelNames.DIGI,
             TimeScanMs = 400,          // Đọc mỗi 400ms
             CalibZero = 0.0,           // Hiệu chỉnh offset
             CalibGain = 1.0,           // Hệ số nhân
@@ -374,11 +375,13 @@ namespace WpfSample.ViewModels
             // BƯỚC 4: Khởi tạo Scale Driver
             // Scale driver không phải Singleton → tạo instance mới
             // ------------------------------------------------
+            // Scale DLL (Scale_DIGI.dll, ...) đã nhúng trong ScanAndScale.Core.dll —
+            // ScaleDriver.Initialize() tự load từ EmbeddedResource, không cần file bên ngoài.
             _scaleDriver = new ScaleDriver();
             _scaleDriver.DataValueChanged += OnScaleDataChanged;
             _scaleDriver.Initialize(_scaleConfig);
             AppendLog(ref _scaleLog, nameof(ScaleLog),
-                $"Đang kết nối cân tại {_scaleConfig.IP}:{_scaleConfig.Port}...");
+                $"Đang kết nối cân {_scaleConfig.ModelName} tại {_scaleConfig.IP}:{_scaleConfig.Port}...");
 
             IsInitialized = true;
             StatusMessage = "Tất cả drivers đã được khởi tạo. Đang lắng nghe dữ liệu...";

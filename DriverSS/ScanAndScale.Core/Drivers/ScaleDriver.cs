@@ -177,6 +177,12 @@ namespace ScanAndScale.Core.Drivers
         /// Tải DLL model cân tương ứng với <see cref="ScaleConfig.ModelName"/>.
         /// Dùng Reflection để gọi hàm GetWeight() trong DLL đó.
         /// <para>
+        /// Ưu tiên 1 — Embedded resource: Scale DLL được nhúng vào ScanAndScale.Core.dll
+        ///   khi build (EmbeddedResource trong .csproj). Không cần file bên ngoài.
+        /// Ưu tiên 2 — File trên disk: tìm trong thư mục .exe / thư mục hiện tại.
+        ///   Dùng khi Scale DLL được deploy thủ công hoặc trong môi trường dev.
+        /// </para>
+        /// <para>
         /// DLL cần có class: {ModelName}.ScaleReading
         /// với method: GetWeight(out double?, out bool?, out bool?, out string, string)
         /// </para>
@@ -185,29 +191,38 @@ namespace ScanAndScale.Core.Drivers
         {
             try
             {
-                // Tên file DLL (phải nằm cùng thư mục với ứng dụng)
                 string dllFileName = $"{_config!.ModelName}.dll";
 
-                // Tìm đường dẫn đầy đủ của DLL
-                string dllFullPath = FindDllPath(dllFileName);
+                // ── Ưu tiên 1: Load từ EmbeddedResource ─────────────────────────────
+                // Scale DLL được nhúng vào ScanAndScale.Core.dll khi build.
+                // Cách này hoạt động ngay cả khi không có file Scale_*.dll bên ngoài.
+                var assembly = LoadAssemblyFromEmbeddedResource(dllFileName);
 
-                if (!File.Exists(dllFullPath))
+                if (assembly != null)
                 {
-                    LogInfo($"Không tìm thấy file: {dllFullPath}");
-                    return false;
+                    LogInfo($"Load model cân từ embedded resource: {dllFileName}");
+                }
+                else
+                {
+                    // ── Ưu tiên 2: Load từ file trên disk (fallback) ─────────────────
+                    // Dùng khi Scale DLL không được nhúng (build cũ, hoặc deploy thủ công).
+                    string dllFullPath = FindDllPath(dllFileName);
+
+                    if (!File.Exists(dllFullPath))
+                    {
+                        LogInfo($"Không tìm thấy embedded resource hoặc file: {dllFileName}");
+                        return false;
+                    }
+
+#if NETFRAMEWORK
+                    assembly = Assembly.LoadFrom(dllFullPath);
+#else
+                    assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(dllFullPath);
+#endif
+                    LogInfo($"Load model cân từ file: {dllFullPath}");
                 }
 
-                // Load assembly từ file DLL
-                // Dùng AssemblyLoadContext.Default để không lock file (có thể update DLL)
-#if NETFRAMEWORK
-                // .NET Framework dùng Assembly.LoadFrom
-                var assembly = Assembly.LoadFrom(dllFullPath);
-#else
-                // .NET 6+ dùng AssemblyLoadContext để quản lý tốt hơn
-                var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(dllFullPath);
-#endif
-
-                // Lấy Type của class ScaleReading trong DLL
+                // ── Lấy class ScaleReading và method GetWeight via Reflection ────────
                 string typeName = $"{_config.ModelName}.ScaleReading";
                 var scaleType = assembly.GetType(typeName);
 
@@ -217,8 +232,7 @@ namespace ScanAndScale.Core.Drivers
                     return false;
                 }
 
-                // Lấy MethodInfo của hàm GetWeight
-                // Signature: GetWeight(out double?, out bool?, out bool?, out string, string rawData)
+                // Signature: GetWeight(out double?, out bool?, out bool?, out string, string)
                 _getWeightMethod = scaleType.GetMethod("GetWeight", new Type[]
                 {
                     typeof(double?).MakeByRefType(),   // out double? WeightValue
@@ -234,9 +248,7 @@ namespace ScanAndScale.Core.Drivers
                     return false;
                 }
 
-                // Tạo instance của class ScaleReading để gọi method
                 _scaleModelInstance = Activator.CreateInstance(scaleType);
-
                 LogInfo($"Load model cân thành công: {_config.ModelName}");
                 return true;
             }
@@ -248,8 +260,50 @@ namespace ScanAndScale.Core.Drivers
         }
 
         /// <summary>
-        /// Tìm đường dẫn đầy đủ của file DLL.
-        /// Ưu tiên tìm trong thư mục của process, sau đó thư mục hiện tại.
+        /// Thử load assembly từ EmbeddedResource trong ScanAndScale.Core.dll.
+        /// <para>
+        /// Scale DLL được nhúng với LogicalName = "Scale_DIGI.dll" (tên file đơn giản,
+        /// không có namespace prefix) bởi target EmbedScaleDlls trong .csproj.
+        /// </para>
+        /// </summary>
+        /// <param name="dllFileName">Tên file DLL, ví dụ "Scale_DIGI.dll"</param>
+        /// <returns>Assembly nếu tìm thấy embedded resource, null nếu không có.</returns>
+        private static System.Reflection.Assembly? LoadAssemblyFromEmbeddedResource(string dllFileName)
+        {
+            try
+            {
+                // Lấy stream của embedded resource từ ScanAndScale.Core.dll
+                // LogicalName trong .csproj được đặt là "Scale_DIGI.dll" (tên file đơn giản)
+                var coreAssembly = typeof(ScaleDriver).Assembly;
+                using var stream = coreAssembly.GetManifestResourceStream(dllFileName);
+
+                if (stream == null)
+                    return null; // Không có embedded resource — dùng fallback file
+
+                // Đọc toàn bộ bytes của DLL
+                var bytes = new byte[stream.Length];
+                var totalRead = 0;
+                while (totalRead < bytes.Length)
+                {
+                    var read = stream.Read(bytes, totalRead, bytes.Length - totalRead);
+                    if (read == 0) break;
+                    totalRead += read;
+                }
+
+                // Load assembly từ byte array — không cần file trên disk
+                // Scale DLL chỉ dùng BCL (Regex, Math) nên load từ bytes hoạt động tốt
+                return System.Reflection.Assembly.Load(bytes);
+            }
+            catch
+            {
+                return null; // Lỗi khi load embedded → fallback sang file
+            }
+        }
+
+        /// <summary>
+        /// Tìm đường dẫn đầy đủ của file DLL trên disk.
+        /// Dùng làm fallback khi không có embedded resource.
+        /// Ưu tiên thư mục của process, sau đó thư mục hiện tại.
         /// </summary>
         private static string FindDllPath(string dllFileName)
         {

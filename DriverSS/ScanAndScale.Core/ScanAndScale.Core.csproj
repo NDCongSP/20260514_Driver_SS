@@ -175,4 +175,72 @@
 
   </Target>
 
+
+  <!--
+  ============================================================
+  TARGET: EmbedScaleDlls
+  ============================================================
+  Nhung Scale_*.dll vao ben trong ScanAndScale.Core.dll nhu
+  EmbeddedResource TRUOC khi CoreCompile chay.
+
+  Loi ich:
+  - Nguoi dung chi can them ScanAndScale.Core.dll la dung duoc ngay
+  - Khong can copy Scale_*.dll thu cong vao thu muc .exe
+  - ScaleDriver se load DLL tu embedded resource (Assembly.Load(byte[]))
+    roi moi fallback sang file neu can
+
+  LogicalName = "Scale_DIGI.dll" (khong co namespace prefix)
+  de GetManifestResourceStream("Scale_DIGI.dll") hoat dong chinh xac.
+  ============================================================
+  -->
+  <Target Name="EmbedScaleDlls" BeforeTargets="CoreCompile">
+
+    <MSBuild Projects="..\Scale_DIGI\Scale_DIGI.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsToEmbed"/>
+    </MSBuild>
+
+    <MSBuild Projects="..\Scale_IND_KG\Scale_IND_KG.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsToEmbed"/>
+    </MSBuild>
+
+    <MSBuild Projects="..\Scale_SampleReading\Scale_SampleReading.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsToEmbed"/>
+    </MSBuild>
+
+    <MSBuild Projects="..\Scale_Vibra_HAW30\Scale_Vibra_HAW30.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsToEmbed"/>
+    </MSBuild>
+
+    <MSBuild Projects="..\Scale_Vibra_SJ6200\Scale_Vibra_SJ6200.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsToEmbed"/>
+    </MSBuild>
+
+    <!--
+    Dang ky EmbeddedResource — LogicalName la ten file don gian ("Scale_DIGI.dll")
+    de ScaleDriver co the goi GetManifestResourceStream("Scale_DIGI.dll")
+    -->
+    <ItemGroup>
+      <EmbeddedResource Include="@(_ScaleDllsToEmbed)"
+                        Condition="Exists('%(Identity)')">
+        <LogicalName>%(Filename)%(Extension)</LogicalName>
+        <WithCulture>false</WithCulture>
+      </EmbeddedResource>
+    </ItemGroup>
+
+    <Message Importance="high"
+             Text="[ScanAndScale.Core] Da nhung EmbeddedResource: %(Filename)%(Extension)"
+             Condition="'@(_ScaleDllsToEmbed)' != ''"/>
+
+  </Target>
+
 </Project>
