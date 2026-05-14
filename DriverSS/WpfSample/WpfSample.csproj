@@ -2,19 +2,19 @@
 
   <!--
   ============================================================
-  WpfSample — Project WPF mẫu hướng dẫn sử dụng ScanAndScale.Core
+  WpfSample - Project WPF mau huong dan su dung ScanAndScale.Core
   ============================================================
-  Target: net8.0-windows (WPF chỉ chạy trên Windows)
+  Target: net8.0-windows (WPF chi chay tren Windows)
   Pattern: MVVM (Model-View-ViewModel)
 
-  Sau khi build, thư mục bin\Debug\net8.0-windows\ sẽ tự có:
-    ✓ WpfSample.exe
-    ✓ ScanAndScale.Core.dll
-    ✓ Scale_DIGI.dll          ← tự động copy, không cần cấu hình
-    ✓ Scale_IND_KG.dll        ← tự động copy
-    ✓ Scale_SampleReading.dll ← tự động copy
-    ✓ Scale_Vibra_HAW30.dll   ← tự động copy
-    ✓ Scale_Vibra_SJ6200.dll  ← tự động copy
+  Sau khi build, thu muc bin\Debug\net8.0-windows\ se tu co:
+    WpfSample.exe
+    ScanAndScale.Core.dll
+    Scale_DIGI.dll          <- tu dong copy
+    Scale_IND_KG.dll        <- tu dong copy
+    Scale_SampleReading.dll <- tu dong copy
+    Scale_Vibra_HAW30.dll   <- tu dong copy
+    Scale_Vibra_SJ6200.dll  <- tu dong copy
   ============================================================
   -->
 
@@ -30,21 +30,12 @@
 
   <!--
   ============================================================
-  THAM CHIẾU ScanAndScale.Core
+  THAM CHIEU ScanAndScale.Core
   ============================================================
-  Khi ProjectReference được thêm:
-  1. MSBuild build ScanAndScale.Core.dll trước
-  2. ScanAndScale.Core build Scale_*.dll (qua ProjectReference của nó)
-  3. ScanAndScale.Core copy Scale_*.dll vào output của nó
-  4. WpfSample nhận ScanAndScale.Core.dll + Scale_*.dll tự động
-
-  Người dùng KHÔNG cần làm gì thêm — Build là xong!
-
-  Nếu dùng DLL thay vì ProjectReference:
-    <Reference Include="ScanAndScale.Core">
-      <HintPath>path\to\ScanAndScale.Core.dll</HintPath>
-    </Reference>
-  → Khi đó cần copy Scale_*.dll thủ công vào output (xem README)
+  Khi ProjectReference duoc them:
+  1. MSBuild build ScanAndScale.Core.dll truoc
+  2. ScanAndScale.Core build Scale_*.dll (qua ProjectReference cua no)
+  3. Target CopyScaleDllsToWpfOutput (duoi day) copy Scale_*.dll vao day
   ============================================================
   -->
   <ItemGroup>
@@ -53,48 +44,62 @@
 
   <!--
   ============================================================
-  MSBuild TARGET: Đảm bảo Scale DLLs có mặt trong output của WpfSample
+  TARGET: CopyScaleDllsToWpfOutput
   ============================================================
-  Mặc dù ScanAndScale.Core đã có target "IncludeScaleDllsForConsumers",
-  target này thêm một bước safety để đảm bảo Scale DLLs được copy đúng.
+  Lay duong dan DLL cua tung Scale project qua GetTargetPath,
+  sau do copy truc tiep vao $(OutputPath) cua WpfSample.
 
-  Cách hoạt động:
-  1. Lấy đường dẫn output của ScanAndScale.Core ($(ScanAndScaleCoreOutput))
-  2. Copy tất cả Scale_*.dll từ đó sang $(OutputPath) của WpfSample
+  Cung pattern voi CopyScaleDllsToOutput trong ScanAndScale.Core.csproj.
+  Approach nay dang tin cay hon viec dung glob tren CoreOutputDir.
   ============================================================
   -->
-  <Target Name="EnsureScaleDllsInOutput" AfterTargets="Build">
+  <Target Name="CopyScaleDllsToWpfOutput" AfterTargets="Build">
 
-    <!-- Lấy đường dẫn output của ScanAndScale.Core -->
-    <MSBuild Projects="..\ScanAndScale.Core\ScanAndScale.Core.csproj"
+    <MSBuild Projects="..\Scale_DIGI\Scale_DIGI.csproj"
              Targets="GetTargetPath"
-             Properties="Configuration=$(Configuration);TargetFramework=net8.0-windows">
-      <Output TaskParameter="TargetOutputs" ItemName="_CoreDllPath"/>
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_WpfScaleDlls"/>
     </MSBuild>
 
-    <PropertyGroup>
-      <!-- Thư mục output của ScanAndScale.Core -->
-      <_CoreOutputDir>$([System.IO.Path]::GetDirectoryName('%(Item._CoreDllPath.Identity)'))\</_CoreOutputDir>
-    </PropertyGroup>
+    <MSBuild Projects="..\Scale_IND_KG\Scale_IND_KG.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_WpfScaleDlls"/>
+    </MSBuild>
 
-    <!-- Tìm tất cả Scale_*.dll trong output của ScanAndScale.Core -->
-    <ItemGroup>
-      <_ScaleDllsFromCore Include="$(_CoreOutputDir)Scale_*.dll"
-                          Condition="'$(_CoreOutputDir)' != '\'"/>
-    </ItemGroup>
+    <MSBuild Projects="..\Scale_SampleReading\Scale_SampleReading.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_WpfScaleDlls"/>
+    </MSBuild>
 
-    <!-- Copy Scale DLLs sang output của WpfSample -->
-    <Copy SourceFiles="@(_ScaleDllsFromCore)"
+    <MSBuild Projects="..\Scale_Vibra_HAW30\Scale_Vibra_HAW30.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_WpfScaleDlls"/>
+    </MSBuild>
+
+    <MSBuild Projects="..\Scale_Vibra_SJ6200\Scale_Vibra_SJ6200.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_WpfScaleDlls"/>
+    </MSBuild>
+
+    <!-- Copy Scale DLLs vao output cua WpfSample -->
+    <Copy SourceFiles="@(_WpfScaleDlls)"
           DestinationFolder="$(OutputPath)"
           SkipUnchangedFiles="true"
           OverwriteReadOnlyFiles="true"
-          Condition="'@(_ScaleDllsFromCore)' != ''">
-      <Output TaskParameter="CopiedFiles" ItemName="_EnsuredDlls"/>
+          Condition="Exists('%(Identity)')">
+      <Output TaskParameter="CopiedFiles" ItemName="_CopiedWpfScaleDlls"/>
     </Copy>
 
-    <Message Importance="normal"
-             Text="[WpfSample] Scale DLL đã sẵn sàng: %(Filename)%(Extension)"
-             Condition="'@(_EnsuredDlls)' != ''"/>
+    <Message Importance="high"
+             Text="[WpfSample] Scale DLL da copy: %(Filename)%(Extension)"
+             Condition="'@(_CopiedWpfScaleDlls)' != ''"/>
+
+    <Warning Text="[WpfSample] Khong tim thay Scale DLL de copy - kiem tra lai Scale projects da build chua?"
+             Condition="'@(_CopiedWpfScaleDlls)' == ''"/>
 
   </Target>
 
