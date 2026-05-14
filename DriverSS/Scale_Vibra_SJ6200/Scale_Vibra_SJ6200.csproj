@@ -13,11 +13,8 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <AssemblyName>Scale_Vibra_SJ6200</AssemblyName>
     <RootNamespace>Scale_Vibra_SJ6200</RootNamespace>
-    <Description>Parser cân Vibra SJ-6200</Description>
-    <Version>1.0.0</Version>
-  </PropertyGroup>
-
-</Project>
+    <Description>Parser cân Vibra SJ-6200</Descr

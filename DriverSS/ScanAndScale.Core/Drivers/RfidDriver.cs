@@ -88,9 +88,6 @@ namespace ScanAndScale.Core.Drivers
         // Regex để parse mã thẻ từ chuỗi nhận được
         private Regex? _dataRegex;
 
-        // Trạng thái driver
-        private DriverStatus _currentStatus = DriverStatus.Unknown;
-
         // Giá trị RFID gần nhất
         private DataValue _currentDataValue = new DataValue(DriverStatus.Unknown, null);
 

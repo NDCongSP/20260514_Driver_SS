@@ -13,11 +13,9 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <AssemblyName>Scale_Vibra_HAW30</AssemblyName>
     <RootNamespace>Scale_Vibra_HAW30</RootNamespace>
     <Description>Parser cân Vibra HAW-30</Description>
     <Version>1.0.4</Version>
-  </PropertyGroup>
-
-</Project>

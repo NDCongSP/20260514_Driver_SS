@@ -13,11 +13,8 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <AssemblyName>Scale_IND_KG</AssemblyName>
     <RootNamespace>Scale_IND_KG</RootNamespace>
-    <Description>Parser cân điện tử IND KG — format: =0004.62(kg)</Description>
-    <Version>1.0.0</Version>
-  </PropertyGroup>
-
-</Project>
+    <Description>Parser cân điện tử IND KG — forma

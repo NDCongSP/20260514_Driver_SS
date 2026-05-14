@@ -46,6 +46,11 @@
     <PackageReference Include="System.Management" Version="9.0.1" />
   </ItemGroup>
 
+  <!-- net472: System.Management la framework assembly co san trong GAC, dung Reference thay vi NuGet -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
+    <Reference Include="System.Management" />
+  </ItemGroup>
+
   <PropertyGroup Condition="'$(TargetFramework)' != 'net472'">
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
