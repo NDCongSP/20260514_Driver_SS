@@ -1,0 +1,45 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Version>1.1.3</Version>
+  </PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="System.IO.Ports" Version="9.0.2" />
+		<PackageReference Include="System.Management" Version="9.0.1" />
+	</ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="DevExpress.Win.Design" Version="24.2.3" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Update="Interop.CoreScanner.dll">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\Scale_DIGI\Scale_DIGI.csproj" />
+		<ProjectReference Include="..\Scale_IND_KG\Scale_IND_KG.csproj" />
+		<ProjectReference Include="..\Scale_SampleReading\Scale_SampleReading.csproj" />
+		<ProjectReference Include="..\Scale_Vibra_HAW30\Scale_Vibra_HAW30.csproj" />
+		<ProjectReference Include="..\Scale_Vibra_SJ6200\Scale_Vibra_SJ6200.csproj" />
+		<ProjectReference Include="..\ScanAndScale.Helper\ScanAndScale.Helper.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Reference Include="Interop.CoreScanner">
+			<HintPath>C:\Program Files\Zebra Technologies\Barcode Scanners\Scanner SDK\Scanner SDK\Sample Applications\bin\Interop.CoreScanner.dll</HintPath>
+		</Reference>
+	</ItemGroup>
+
+  <Target Name="CopyNupkgLocal" Condition="$(GeneratePackageOnBuild) == 'true'" AfterTargets="Pack">
+    <!-- Publish nuget package -->
+    <Message Importance="high" Text="dotnet nuget push -s $(NugetUrl) bin\Debug\$(MSBuildProjectName).$(Version).nupkg -k $(NugetKey)"></Message>
+    <Exec Command="dotnet nuget push -s http://10.40.10.4:5860/v3/index.json bin\Debug\$(MSBuildProjectName).$(Version).nupkg -k 11EA37E236F449A3A10B188194A5C111" ContinueOnError="true" />
+  </Target>
+  
+</Project>
