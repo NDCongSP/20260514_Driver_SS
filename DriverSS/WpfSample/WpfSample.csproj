@@ -10,11 +10,18 @@
   Sau khi build, thu muc bin\Debug\net8.0-windows\ se tu co:
     WpfSample.exe
     ScanAndScale.Core.dll
-    Scale_DIGI.dll          <- tu dong copy
+    Scale_DIGI.dll          <- tu dong copy (khong can cau hinh gi them)
     Scale_IND_KG.dll        <- tu dong copy
     Scale_SampleReading.dll <- tu dong copy
     Scale_Vibra_HAW30.dll   <- tu dong copy
     Scale_Vibra_SJ6200.dll  <- tu dong copy
+
+  Cach hoat dong:
+    ScanAndScale.Core co target IncludeScaleDllsForConsumers
+    (BeforeTargets="GetCopyToOutputDirectoryItems"). Target do query
+    duong dan DLL chinh xac tu tung Scale project va dang ky chung
+    la None item voi CopyToOutputDirectory=PreserveNewest.
+    MSBuild tu dong propagate cac item nay sang WpfSample khi build.
   ============================================================
   -->
 
@@ -29,78 +36,12 @@
   </PropertyGroup>
 
   <!--
-  ============================================================
-  THAM CHIEU ScanAndScale.Core
-  ============================================================
-  Khi ProjectReference duoc them:
-  1. MSBuild build ScanAndScale.Core.dll truoc
-  2. ScanAndScale.Core build Scale_*.dll (qua ProjectReference cua no)
-  3. Target CopyScaleDllsToWpfOutput (duoi day) copy Scale_*.dll vao day
-  ============================================================
+  Chi can khai bao ProjectReference den ScanAndScale.Core la du.
+  Scale_*.dll se tu dong xuat hien trong output nho target
+  IncludeScaleDllsForConsumers ben trong ScanAndScale.Core.
   -->
   <ItemGroup>
     <ProjectReference Include="..\ScanAndScale.Core\ScanAndScale.Core.csproj" />
   </ItemGroup>
-
-  <!--
-  ============================================================
-  TARGET: CopyScaleDllsToWpfOutput
-  ============================================================
-  Lay duong dan DLL cua tung Scale project qua GetTargetPath,
-  sau do copy truc tiep vao $(OutputPath) cua WpfSample.
-
-  Cung pattern voi CopyScaleDllsToOutput trong ScanAndScale.Core.csproj.
-  Approach nay dang tin cay hon viec dung glob tren CoreOutputDir.
-  ============================================================
-  -->
-  <Target Name="CopyScaleDllsToWpfOutput" AfterTargets="Build">
-
-    <MSBuild Projects="..\Scale_DIGI\Scale_DIGI.csproj"
-             Targets="GetTargetPath"
-             Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_WpfScaleDlls"/>
-    </MSBuild>
-
-    <MSBuild Projects="..\Scale_IND_KG\Scale_IND_KG.csproj"
-             Targets="GetTargetPath"
-             Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_WpfScaleDlls"/>
-    </MSBuild>
-
-    <MSBuild Projects="..\Scale_SampleReading\Scale_SampleReading.csproj"
-             Targets="GetTargetPath"
-             Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_WpfScaleDlls"/>
-    </MSBuild>
-
-    <MSBuild Projects="..\Scale_Vibra_HAW30\Scale_Vibra_HAW30.csproj"
-             Targets="GetTargetPath"
-             Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_WpfScaleDlls"/>
-    </MSBuild>
-
-    <MSBuild Projects="..\Scale_Vibra_SJ6200\Scale_Vibra_SJ6200.csproj"
-             Targets="GetTargetPath"
-             Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_WpfScaleDlls"/>
-    </MSBuild>
-
-    <!-- Copy Scale DLLs vao output cua WpfSample -->
-    <Copy SourceFiles="@(_WpfScaleDlls)"
-          DestinationFolder="$(OutputPath)"
-          SkipUnchangedFiles="true"
-          OverwriteReadOnlyFiles="true"
-          Condition="Exists('%(Identity)')">
-      <Output TaskParameter="CopiedFiles" ItemName="_CopiedWpfScaleDlls"/>
-    </Copy>
-
-    <Message Importance="high"
-             Text="[WpfSample] Scale DLL da copy: %(Filename)%(Extension)"
-             Condition="'@(_CopiedWpfScaleDlls)' != ''"/>
-
-    <Warning Text="[WpfSample] Khong tim thay Scale DLL de copy - kiem tra lai Scale projects da build chua?"
-             Condition="'@(_CopiedWpfScaleDlls)' == ''"/>
-
-  </Target>
 
 </Project>

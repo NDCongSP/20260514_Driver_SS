@@ -42,11 +42,12 @@
     <PackageReference Include="System.IO.Ports" Version="9.0.2" />
   </ItemGroup>
 
+  <!-- net6+ dung NuGet System.Management -->
   <ItemGroup Condition="'$(TargetFramework)' != 'net472'">
     <PackageReference Include="System.Management" Version="9.0.1" />
   </ItemGroup>
 
-  <!-- net472: System.Management la framework assembly co san trong GAC, dung Reference thay vi NuGet -->
+  <!-- net472: System.Management la GAC assembly, dung Reference thay vi NuGet -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
     <Reference Include="System.Management" />
   </ItemGroup>
@@ -108,116 +109,67 @@
 
   <!--
   ============================================================
-  TARGET 1: CopyScaleDllsToOutput
+  TARGET: IncludeScaleDllsForConsumers
   ============================================================
-  Sau khi ScanAndScale.Core build xong, lay duong dan DLL
-  tu tung Scale project va copy vao $(OutputPath).
+  Khi project khac (WpfSample, WinFormsApp...) reference
+  ScanAndScale.Core, MSBuild goi GetCopyToOutputDirectoryItems
+  tren Core de biet co nhung file nao can copy sang consumer.
 
-  Ket qua: bin\Debug\net8.0-windows\ se co:
-    ScanAndScale.Core.dll
-    Scale_DIGI.dll
-    Scale_IND_KG.dll
-    Scale_SampleReading.dll
-    Scale_Vibra_HAW30.dll
-    Scale_Vibra_SJ6200.dll
+  Target nay:
+  1. Goi GetTargetPath tren tung Scale project de lay duong dan DLL chinh xac
+  2. Dang ky cac DLL do la None item voi CopyToOutputDirectory=PreserveNewest
+  3. GetCopyToOutputDirectoryItems thu thap cac item nay va tra ve cho consumer
+
+  Ket qua: WpfSample (va bat ky consumer nao) tu dong co Scale_*.dll
+  trong output cua no MA KHONG can them cau hinh gi!
   ============================================================
   -->
-  <Target Name="CopyScaleDllsToOutput" AfterTargets="Build">
+  <Target Name="IncludeScaleDllsForConsumers"
+          BeforeTargets="GetCopyToOutputDirectoryItems">
 
+    <!-- Lay duong dan DLL chinh xac tu tung Scale project -->
     <MSBuild Projects="..\Scale_DIGI\Scale_DIGI.csproj"
              Targets="GetTargetPath"
              Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllPaths"/>
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsForPropagation"/>
     </MSBuild>
 
     <MSBuild Projects="..\Scale_IND_KG\Scale_IND_KG.csproj"
              Targets="GetTargetPath"
              Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllPaths"/>
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsForPropagation"/>
     </MSBuild>
 
     <MSBuild Projects="..\Scale_SampleReading\Scale_SampleReading.csproj"
              Targets="GetTargetPath"
              Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllPaths"/>
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsForPropagation"/>
     </MSBuild>
 
     <MSBuild Projects="..\Scale_Vibra_HAW30\Scale_Vibra_HAW30.csproj"
              Targets="GetTargetPath"
              Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllPaths"/>
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsForPropagation"/>
     </MSBuild>
 
     <MSBuild Projects="..\Scale_Vibra_SJ6200\Scale_Vibra_SJ6200.csproj"
              Targets="GetTargetPath"
              Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllPaths"/>
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsForPropagation"/>
     </MSBuild>
 
-    <!-- Copy tat ca Scale DLL vao output cua ScanAndScale.Core -->
-    <Copy SourceFiles="@(_ScaleDllPaths)"
-          DestinationFolder="$(OutputPath)"
-          SkipUnchangedFiles="true"
-          OverwriteReadOnlyFiles="true"
-          Condition="Exists('%(Identity)')">
-      <Output TaskParameter="CopiedFiles" ItemName="_CopiedScaleDlls"/>
-    </Copy>
-
-    <Message Importance="high"
-             Text="[ScanAndScale.Core] Scale DLL da copy: %(Filename)%(Extension)"
-             Condition="'@(_CopiedScaleDlls)' != ''"/>
-
-  </Target>
-
-  <!--
-  ============================================================
-  TARGET 2: IncludeScaleDllsForConsumers
-  ============================================================
-  Khi project khac (WpfSample, WinFormsApp, ...) reference
-  ScanAndScale.Core, MSBuild se goi GetCopyToOutputDirectoryItems
-  tren ScanAndScale.Core de biet co nhung file nao can copy.
-
-  Target nay chen Scale DLL vao danh sach do, nen consumer
-  project se tu dong copy Scale_*.dll vao output cua no.
-
-  Ket qua: WpfSample\bin\Debug\net8.0-windows\ tu co Scale_*.dll
-  MA KHONG can them cau hinh gi vao WpfSample.csproj!
-  ============================================================
-  -->
-  <Target Name="IncludeScaleDllsForConsumers"
-          BeforeTargets="GetCopyToOutputDirectoryItems"
-          DependsOnTargets="CopyScaleDllsToOutput">
-
+    <!--
+    Dang ky cac DLL nhu None item voi CopyToOutputDirectory.
+    MSBuild se tu dong copy chung vao output cua bat ky project
+    nao reference ScanAndScale.Core.
+    Link: dat ten file trong output (khong co duong dan tuyet doi)
+    -->
     <ItemGroup>
-      <None Include="$(OutputPath)Scale_DIGI.dll"
-            Condition="Exists('$(OutputPath)Scale_DIGI.dll')">
+      <None Include="@(_ScaleDllsForPropagation)"
+            Condition="Exists('%(Identity)')">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Link>Scale_DIGI.dll</Link>
         <Visible>false</Visible>
-      </None>
-      <None Include="$(OutputPath)Scale_IND_KG.dll"
-            Condition="Exists('$(OutputPath)Scale_IND_KG.dll')">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Link>Scale_IND_KG.dll</Link>
-        <Visible>false</Visible>
-      </None>
-      <None Include="$(OutputPath)Scale_SampleReading.dll"
-            Condition="Exists('$(OutputPath)Scale_SampleReading.dll')">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Link>Scale_SampleReading.dll</Link>
-        <Visible>false</Visible>
-      </None>
-      <None Include="$(OutputPath)Scale_Vibra_HAW30.dll"
-            Condition="Exists('$(OutputPath)Scale_Vibra_HAW30.dll')">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Link>Scale_Vibra_HAW30.dll</Link>
-        <Visible>false</Visible>
-      </None>
-      <None Include="$(OutputPath)Scale_Vibra_SJ6200.dll"
-            Condition="Exists('$(OutputPath)Scale_Vibra_SJ6200.dll')">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Link>Scale_Vibra_SJ6200.dll</Link>
-        <Visible>false</Visible>
+        <Link>%(Filename)%(Extension)</Link>
       </None>
     </ItemGroup>
 
