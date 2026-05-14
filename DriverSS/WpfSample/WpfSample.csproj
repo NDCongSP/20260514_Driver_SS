@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+  ============================================================
+  WpfSample — Project WPF mẫu hướng dẫn sử dụng ScanAndScale.Core
+  ============================================================
+  Target: net8.0-windows (WPF chỉ chạy trên Windows)
+  Pattern: MVVM (Model-View-ViewModel)
+  ============================================================
+  -->
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>WpfSample</RootNamespace>
+    <AssemblyName>WpfSample</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+  Tham chiếu đến thư viện ScanAndScale.Core.
+  Trong thực tế, bạn có thể:
+    Option 1: ProjectReference (như ở đây, dùng khi có source code)
+    Option 2: <Reference Include="ScanAndScale.Core"><HintPath>path\to\ScanAndScale.Core.dll</HintPath></Reference>
+    Option 3: Cài qua NuGet nếu đã publish package
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\ScanAndScale.Core\ScanAndScale.Core.csproj" />
+  </ItemGroup>
+
+  <!--
+  QUAN TRỌNG: Copy các DLL model cân vào thư mục output khi build.
+  Các file .dll này phải tồn tại cùng thư mục với WpfSample.exe.
+  Nếu không có, ScaleDriver sẽ báo lỗi không load được model.
+  -->
+  <!--
+  <ItemGroup>
+    <None Update="Scale_DIGI.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  -->
+
+</Project>

@@ -1,0 +1,75 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+  ============================================================
+  ScanAndScale.Core — Thư viện driver đa nền tảng
+  ============================================================
+  Multi-target để tương thích với nhiều phiên bản .NET:
+    • net472       → .NET Framework 4.7.2 (WinForms cũ)
+    • net6.0-windows → .NET 6 (WinForms / WPF)
+    • net8.0-windows → .NET 8 (WinForms / WPF)
+
+  Thư viện này KHÔNG phụ thuộc vào:
+    • WinForms (System.Windows.Forms)
+    • WPF (System.Windows)
+    • DevExpress
+  → Có thể dùng được trên cả WinForms lẫn WPF.
+  ============================================================
+  -->
+
+  <PropertyGroup>
+    <TargetFrameworks>net472;net6.0-windows;net8.0-windows</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>ScanAndScale.Core</AssemblyName>
+    <RootNamespace>ScanAndScale.Core</RootNamespace>
+    <Version>1.0.0</Version>
+    <Description>Cross-platform driver library for Barcode (Zebra SDK), RFID (SerialPort), and Scale (TCP/IP). Works on WinForms and WPF.</Description>
+    <Authors>ScanAndScale</Authors>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <!--
+  Kích hoạt symbol ZEBRA_SCANNER nếu file Interop.CoreScanner.dll tồn tại trong thư mục lib\.
+  Cách dùng: Copy file Interop.CoreScanner.dll từ thư mục cài đặt Zebra SDK vào thư mục lib\ của project.
+  Thường nằm tại: C:\Program Files\Zebra Technologies\Barcode Scanners\Scanner SDK\...\bin\Interop.CoreScanner.dll
+  -->
+  <PropertyGroup Condition="Exists('lib\Interop.CoreScanner.dll')">
+    <DefineConstants>$(DefineConstants);ZEBRA_SCANNER</DefineConstants>
+  </PropertyGroup>
+
+  <!-- Reference DLL Zebra CoreScanner (chỉ load nếu file tồn tại) -->
+  <ItemGroup Condition="Exists('lib\Interop.CoreScanner.dll')">
+    <Reference Include="Interop.CoreScanner">
+      <HintPath>lib\Interop.CoreScanner.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- NuGet packages cần thiết -->
+  <ItemGroup>
+    <!-- SerialPort dùng cho RFID driver -->
+    <PackageReference Include="System.IO.Ports" Version="9.0.2" />
+  </ItemGroup>
+
+  <!-- System.Management chỉ cần cho net6+ (net472 có sẵn trong GAC) -->
+  <ItemGroup Condition="'$(TargetFramework)' != 'net472'">
+    <PackageReference Include="System.Management" Version="9.0.1" />
+  </ItemGroup>
+
+  <!-- ImplicitUsings chỉ hỗ trợ từ .NET 6+ -->
+  <PropertyGroup Condition="'$(TargetFramework)' != 'net472'">
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <!-- net472: thêm các using cần thiết cho toàn bộ project -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
+    <Using Include="System"/>
+    <Using Include="System.Collections.Generic"/>
+    <Using Include="System.IO"/>
+    <Using Include="System.Linq"/>
+    <Using Include="System.Threading"/>
+    <Using Include="System.Threading.Tasks"/>
+  </ItemGroup>
+
+</Project>
