@@ -156,15 +156,31 @@ namespace WpfSample.ViewModels
         public double ScaleValue
         {
             get => _scaleValue;
-            private set => SetProperty(ref _scaleValue, value);
+            private set
+            {
+                if (SetProperty(ref _scaleValue, value))
+                    OnPropertyChanged(nameof(ScaleDisplayText));
+            }
         }
 
         /// <summary>Đơn vị cân (KG, G, TON).</summary>
         public string ScaleUnit
         {
             get => _scaleUnit;
-            private set => SetProperty(ref _scaleUnit, value);
+            private set
+            {
+                if (SetProperty(ref _scaleUnit, value))
+                    OnPropertyChanged(nameof(ScaleDisplayText));
+            }
         }
+
+        /// <summary>
+        /// Giá trị cân đã format kèm đơn vị — dùng trực tiếp cho TextBox.Text.
+        /// Ví dụ: "3.142 KG"
+        /// Tránh dùng MultiBinding StringFormat vì có thể render sai khi
+        /// hai binding update không đồng thời (timing mismatch).
+        /// </summary>
+        public string ScaleDisplayText => $"{_scaleValue:F3} {_scaleUnit}";
 
         /// <summary>Cân có ổn định không (Stable flag).</summary>
         public bool ScaleStable

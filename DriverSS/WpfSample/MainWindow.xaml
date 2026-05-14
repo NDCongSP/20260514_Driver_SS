@@ -281,14 +281,12 @@ Tất cả dữ liệu bind từ MainViewModel qua DataContext.
                                  Background="{Binding ScaleTare, Converter={StaticResource TareToBg}}"
                                  Foreground="{Binding ScaleStable, Converter={StaticResource StableToFg}}">
                             <!--
-                            MultiBinding để ghép giá trị + đơn vị: "3.142 KG"
-                            StringFormat: {0:F3} = 3 chữ số thập phân
+                            Dùng ScaleDisplayText thay vì MultiBinding StringFormat
+                            để tránh timing mismatch khi hai binding update không đồng thời.
+                            ScaleDisplayText = $"{ScaleValue:F3} {ScaleUnit}" (tính trong ViewModel)
                             -->
                             <TextBox.Text>
-                                <MultiBinding StringFormat="{}{0:F3} {1}">
-                                    <Binding Path="ScaleValue" Mode="OneWay"/>
-                                    <Binding Path="ScaleUnit" Mode="OneWay"/>
-                                </MultiBinding>
+                                <Binding Path="ScaleDisplayText" Mode="OneWay"/>
                             </TextBox.Text>
                         </TextBox>
 
