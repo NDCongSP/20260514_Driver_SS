@@ -1,14 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!--
+  ============================================================
+  Scale_SampleReading — Parser cân mẫu / Vibra
+  ============================================================
+  netstandard2.0: tương thích mọi .NET version
+  Dùng khi ScaleConfig.ModelName = "Scale_SampleReading"
+  ============================================================
+  -->
+
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <AssemblyName>Scale_SampleReading</AssemblyName>
+    <RootNamespace>Scale_SampleReading</RootNamespace>
+    <Description>Parser cân mẫu Vibra — ST/US, NT/GS format</Description>
+    <Version>1.0.0</Version>
   </PropertyGroup>
-  <Target Name="CopyNupkgLocal" Condition="$(GeneratePackageOnBuild) == 'true'" AfterTargets="Pack">
-    <!-- Publish nuget package -->
-    <Message Importance="high" Text="dotnet nuget push -s $(NugetUrl) bin\Debug\$(MSBuildProjectName).$(Version).nupkg -k $(NugetKey)"></Message>
-    <Exec Command="dotnet nuget push -s http://10.40.10.4:5860/v3/index.json bin\Debug\$(MSBuildProjectName).$(Version).nupkg -k 11EA37E236F449A3A10B188194A5C111" ContinueOnError="true" />
-  </Target>
+
 </Project>

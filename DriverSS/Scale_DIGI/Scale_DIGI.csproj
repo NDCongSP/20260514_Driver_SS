@@ -1,14 +1,27 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+  ============================================================
+  Scale_DIGI — Parser cân DIGI (format: "3.08@=")
+  ============================================================
+  netstandard2.0: tương thích với .NET Framework 4.7.2, .NET 6, .NET 8
+  → Không cần đổi target khi dùng ở project WinForms hoặc WPF bất kỳ.
+
+  Cách dùng: ScanAndScale.Core tự động load DLL này tại runtime
+  qua Reflection khi ScaleConfig.ModelName = "Scale_DIGI".
+  DLL này KHÔNG cần được reference thủ công — chỉ cần nằm cùng thư mục .exe
+  ============================================================
+  -->
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <AssemblyName>Scale_DIGI</AssemblyName>
+    <RootNamespace>Scale_DIGI</RootNamespace>
+    <Description>Parser cân điện tử DIGI — format: 3.08@=</Description>
+    <Version>1.0.0</Version>
   </PropertyGroup>
-  <Target Name="CopyNupkgLocal" Condition="$(GeneratePackageOnBuild) == 'true'" AfterTargets="Pack">
-    <!-- Publish nuget package -->
-    <Message Importance="high" Text="dotnet nuget push -s $(NugetUrl) bin\Debug\$(MSBuildProjectName).$(Version).nupkg -k $(NugetKey)"></Message>
-    <Exec Command="dotnet nuget push -s http://10.40.10.4:5860/v3/index.json bin\Debug\$(MSBuildProjectName).$(Version).nupkg -k 11EA37E236F449A3A10B188194A5C111" ContinueOnError="true" />
-  </Target>
+
 </Project>

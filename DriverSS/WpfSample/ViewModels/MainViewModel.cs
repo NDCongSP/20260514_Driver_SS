@@ -270,7 +270,9 @@ namespace WpfSample.ViewModels
             Enable = true,
             IP = "192.168.80.237",    // ← Thay bằng IP thực của cân
             Port = 23,                 // Cổng Telnet của cân
-            ModelName = "Scale_DIGI", // Tên DLL parser (Scale_DIGI.dll phải tồn tại)
+            // Dùng ScaleModelNames thay cho string thô → tránh typo, IntelliSense hỗ trợ
+            // Các lựa chọn: ScaleModelNames.DIGI, IND_KG, Vibra_SJ6200, Vibra_HAW30, SampleReading
+            ModelName = ScaleModelNames.DIGI, // Scale_DIGI.dll — tự build và copy vào output
             TimeScanMs = 400,          // Đọc mỗi 400ms
             CalibZero = 0.0,           // Hiệu chỉnh offset
             CalibGain = 1.0,           // Hệ số nhân

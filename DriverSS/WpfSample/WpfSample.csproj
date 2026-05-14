@@ -6,6 +6,15 @@
   ============================================================
   Target: net8.0-windows (WPF chỉ chạy trên Windows)
   Pattern: MVVM (Model-View-ViewModel)
+
+  Sau khi build, thư mục bin\Debug\net8.0-windows\ sẽ tự có:
+    ✓ WpfSample.exe
+    ✓ ScanAndScale.Core.dll
+    ✓ Scale_DIGI.dll          ← tự động copy, không cần cấu hình
+    ✓ Scale_IND_KG.dll        ← tự động copy
+    ✓ Scale_SampleReading.dll ← tự động copy
+    ✓ Scale_Vibra_HAW30.dll   ← tự động copy
+    ✓ Scale_Vibra_SJ6200.dll  ← tự động copy
   ============================================================
   -->
 
@@ -20,27 +29,73 @@
   </PropertyGroup>
 
   <!--
-  Tham chiếu đến thư viện ScanAndScale.Core.
-  Trong thực tế, bạn có thể:
-    Option 1: ProjectReference (như ở đây, dùng khi có source code)
-    Option 2: <Reference Include="ScanAndScale.Core"><HintPath>path\to\ScanAndScale.Core.dll</HintPath></Reference>
-    Option 3: Cài qua NuGet nếu đã publish package
+  ============================================================
+  THAM CHIẾU ScanAndScale.Core
+  ============================================================
+  Khi ProjectReference được thêm:
+  1. MSBuild build ScanAndScale.Core.dll trước
+  2. ScanAndScale.Core build Scale_*.dll (qua ProjectReference của nó)
+  3. ScanAndScale.Core copy Scale_*.dll vào output của nó
+  4. WpfSample nhận ScanAndScale.Core.dll + Scale_*.dll tự động
+
+  Người dùng KHÔNG cần làm gì thêm — Build là xong!
+
+  Nếu dùng DLL thay vì ProjectReference:
+    <Reference Include="ScanAndScale.Core">
+      <HintPath>path\to\ScanAndScale.Core.dll</HintPath>
+    </Reference>
+  → Khi đó cần copy Scale_*.dll thủ công vào output (xem README)
+  ============================================================
   -->
   <ItemGroup>
     <ProjectReference Include="..\ScanAndScale.Core\ScanAndScale.Core.csproj" />
   </ItemGroup>
 
   <!--
-  QUAN TRỌNG: Copy các DLL model cân vào thư mục output khi build.
-  Các file .dll này phải tồn tại cùng thư mục với WpfSample.exe.
-  Nếu không có, ScaleDriver sẽ báo lỗi không load được model.
+  ============================================================
+  MSBuild TARGET: Đảm bảo Scale DLLs có mặt trong output của WpfSample
+  ============================================================
+  Mặc dù ScanAndScale.Core đã có target "IncludeScaleDllsForConsumers",
+  target này thêm một bước safety để đảm bảo Scale DLLs được copy đúng.
+
+  Cách hoạt động:
+  1. Lấy đường dẫn output của ScanAndScale.Core ($(ScanAndScaleCoreOutput))
+  2. Copy tất cả Scale_*.dll từ đó sang $(OutputPath) của WpfSample
+  ============================================================
   -->
-  <!--
-  <ItemGroup>
-    <None Update="Scale_DIGI.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-  -->
+  <Target Name="EnsureScaleDllsInOutput" AfterTargets="Build">
+
+    <!-- Lấy đường dẫn output của ScanAndScale.Core -->
+    <MSBuild Projects="..\ScanAndScale.Core\ScanAndScale.Core.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration);TargetFramework=net8.0-windows">
+      <Output TaskParameter="TargetOutputs" ItemName="_CoreDllPath"/>
+    </MSBuild>
+
+    <PropertyGroup>
+      <!-- Thư mục output của ScanAndScale.Core -->
+      <_CoreOutputDir>$([System.IO.Path]::GetDirectoryName('%(Item._CoreDllPath.Identity)'))\</_CoreOutputDir>
+    </PropertyGroup>
+
+    <!-- Tìm tất cả Scale_*.dll trong output của ScanAndScale.Core -->
+    <ItemGroup>
+      <_ScaleDllsFromCore Include="$(_CoreOutputDir)Scale_*.dll"
+                          Condition="'$(_CoreOutputDir)' != '\'"/>
+    </ItemGroup>
+
+    <!-- Copy Scale DLLs sang output của WpfSample -->
+    <Copy SourceFiles="@(_ScaleDllsFromCore)"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true"
+          OverwriteReadOnlyFiles="true"
+          Condition="'@(_ScaleDllsFromCore)' != ''">
+      <Output TaskParameter="CopiedFiles" ItemName="_EnsuredDlls"/>
+    </Copy>
+
+    <Message Importance="normal"
+             Text="[WpfSample] Scale DLL đã sẵn sàng: %(Filename)%(Extension)"
+             Condition="'@(_EnsuredDlls)' != ''"/>
+
+  </Target>
 
 </Project>

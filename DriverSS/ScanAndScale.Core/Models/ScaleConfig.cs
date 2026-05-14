@@ -6,6 +6,38 @@
 namespace ScanAndScale.Core.Models
 {
     /// <summary>
+    /// Các tên model cân được hỗ trợ — dùng thay cho chuỗi string
+    /// để tránh lỗi typo khi cấu hình <see cref="ScaleConfig.ModelName"/>.
+    /// <para>
+    /// Mỗi tên tương ứng với một file DLL parser (ví dụ: Scale_DIGI.dll).
+    /// DLL đó phải tồn tại cùng thư mục với file .exe của ứng dụng.
+    /// </para>
+    /// </summary>
+    public static class ScaleModelNames
+    {
+        /// <summary>Cân DIGI — format: "3.08@="</summary>
+        public const string DIGI = "Scale_DIGI";
+
+        /// <summary>Cân IND đơn vị KG — format: "=0004.62(kg)"</summary>
+        public const string IND_KG = "Scale_IND_KG";
+
+        /// <summary>Cân Vibra SJ-6200</summary>
+        public const string Vibra_SJ6200 = "Scale_Vibra_SJ6200";
+
+        /// <summary>Cân Vibra HAW-30</summary>
+        public const string Vibra_HAW30 = "Scale_Vibra_HAW30";
+
+        /// <summary>Cân mẫu / test — format Vibra generic</summary>
+        public const string SampleReading = "Scale_SampleReading";
+
+        /// <summary>Danh sách tất cả tên model hợp lệ.</summary>
+        public static readonly string[] All =
+        {
+            DIGI, IND_KG, Vibra_SJ6200, Vibra_HAW30, SampleReading
+        };
+    }
+
+    /// <summary>
     /// Cấu hình kết nối TCP/IP và xử lý dữ liệu cho Scale Driver.
     /// <para>
     /// Cân điện tử kết nối qua mạng LAN (Ethernet). Driver kết nối TCP

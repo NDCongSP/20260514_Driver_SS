@@ -2,18 +2,14 @@
 
   <!--
   ============================================================
-  ScanAndScale.Core — Thư viện driver đa nền tảng
+  ScanAndScale.Core - Thu vien driver da nen tang
   ============================================================
-  Multi-target để tương thích với nhiều phiên bản .NET:
-    • net472       → .NET Framework 4.7.2 (WinForms cũ)
-    • net6.0-windows → .NET 6 (WinForms / WPF)
-    • net8.0-windows → .NET 8 (WinForms / WPF)
+  Multi-target:
+    net472          .NET Framework 4.7.2 (WinForms cu)
+    net6.0-windows  .NET 6  (WinForms / WPF)
+    net8.0-windows  .NET 8  (WinForms / WPF)
 
-  Thư viện này KHÔNG phụ thuộc vào:
-    • WinForms (System.Windows.Forms)
-    • WPF (System.Windows)
-    • DevExpress
-  → Có thể dùng được trên cả WinForms lẫn WPF.
+  Khong phu thuoc WinForms, WPF, DevExpress.
   ============================================================
   -->
 
@@ -24,21 +20,16 @@
     <AssemblyName>ScanAndScale.Core</AssemblyName>
     <RootNamespace>ScanAndScale.Core</RootNamespace>
     <Version>1.0.0</Version>
-    <Description>Cross-platform driver library for Barcode (Zebra SDK), RFID (SerialPort), and Scale (TCP/IP). Works on WinForms and WPF.</Description>
+    <Description>Cross-platform driver library for Barcode, RFID, Scale. Works on WinForms and WPF.</Description>
     <Authors>ScanAndScale</Authors>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
-  <!--
-  Kích hoạt symbol ZEBRA_SCANNER nếu file Interop.CoreScanner.dll tồn tại trong thư mục lib\.
-  Cách dùng: Copy file Interop.CoreScanner.dll từ thư mục cài đặt Zebra SDK vào thư mục lib\ của project.
-  Thường nằm tại: C:\Program Files\Zebra Technologies\Barcode Scanners\Scanner SDK\...\bin\Interop.CoreScanner.dll
-  -->
+  <!-- Bat Zebra Scanner neu co Interop.CoreScanner.dll trong thu muc lib\ -->
   <PropertyGroup Condition="Exists('lib\Interop.CoreScanner.dll')">
     <DefineConstants>$(DefineConstants);ZEBRA_SCANNER</DefineConstants>
   </PropertyGroup>
 
-  <!-- Reference DLL Zebra CoreScanner (chỉ load nếu file tồn tại) -->
   <ItemGroup Condition="Exists('lib\Interop.CoreScanner.dll')">
     <Reference Include="Interop.CoreScanner">
       <HintPath>lib\Interop.CoreScanner.dll</HintPath>
@@ -46,23 +37,19 @@
     </Reference>
   </ItemGroup>
 
-  <!-- NuGet packages cần thiết -->
+  <!-- NuGet packages -->
   <ItemGroup>
-    <!-- SerialPort dùng cho RFID driver -->
     <PackageReference Include="System.IO.Ports" Version="9.0.2" />
   </ItemGroup>
 
-  <!-- System.Management chỉ cần cho net6+ (net472 có sẵn trong GAC) -->
   <ItemGroup Condition="'$(TargetFramework)' != 'net472'">
     <PackageReference Include="System.Management" Version="9.0.1" />
   </ItemGroup>
 
-  <!-- ImplicitUsings chỉ hỗ trợ từ .NET 6+ -->
   <PropertyGroup Condition="'$(TargetFramework)' != 'net472'">
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
-  <!-- net472: thêm các using cần thiết cho toàn bộ project -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
     <Using Include="System"/>
     <Using Include="System.Collections.Generic"/>
@@ -71,5 +58,164 @@
     <Using Include="System.Threading"/>
     <Using Include="System.Threading.Tasks"/>
   </ItemGroup>
+
+  <!--
+  ============================================================
+  SCALE PARSER PROJECTS
+  ============================================================
+  ReferenceOutputAssembly=false:
+    Build cac Scale project cung luc nhung KHONG link DLL vao
+    ScanAndScale.Core.dll luc compile. Scale DLL duoc ScaleDriver
+    load dong qua Reflection tai runtime.
+
+  SkipGetTargetFrameworkProperties=true:
+    Cho phep multi-target (net472/net6/net8) reference
+    netstandard2.0 project ma khong bao loi framework mismatch.
+  ============================================================
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Scale_DIGI\Scale_DIGI.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <Private>false</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Scale_IND_KG\Scale_IND_KG.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <Private>false</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Scale_SampleReading\Scale_SampleReading.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <Private>false</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Scale_Vibra_HAW30\Scale_Vibra_HAW30.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <Private>false</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Scale_Vibra_SJ6200\Scale_Vibra_SJ6200.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!--
+  ============================================================
+  TARGET 1: CopyScaleDllsToOutput
+  ============================================================
+  Sau khi ScanAndScale.Core build xong, lay duong dan DLL
+  tu tung Scale project va copy vao $(OutputPath).
+
+  Ket qua: bin\Debug\net8.0-windows\ se co:
+    ScanAndScale.Core.dll
+    Scale_DIGI.dll
+    Scale_IND_KG.dll
+    Scale_SampleReading.dll
+    Scale_Vibra_HAW30.dll
+    Scale_Vibra_SJ6200.dll
+  ============================================================
+  -->
+  <Target Name="CopyScaleDllsToOutput" AfterTargets="Build">
+
+    <MSBuild Projects="..\Scale_DIGI\Scale_DIGI.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllPaths"/>
+    </MSBuild>
+
+    <MSBuild Projects="..\Scale_IND_KG\Scale_IND_KG.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllPaths"/>
+    </MSBuild>
+
+    <MSBuild Projects="..\Scale_SampleReading\Scale_SampleReading.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllPaths"/>
+    </MSBuild>
+
+    <MSBuild Projects="..\Scale_Vibra_HAW30\Scale_Vibra_HAW30.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllPaths"/>
+    </MSBuild>
+
+    <MSBuild Projects="..\Scale_Vibra_SJ6200\Scale_Vibra_SJ6200.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllPaths"/>
+    </MSBuild>
+
+    <!-- Copy tat ca Scale DLL vao output cua ScanAndScale.Core -->
+    <Copy SourceFiles="@(_ScaleDllPaths)"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true"
+          OverwriteReadOnlyFiles="true"
+          Condition="Exists('%(Identity)')">
+      <Output TaskParameter="CopiedFiles" ItemName="_CopiedScaleDlls"/>
+    </Copy>
+
+    <Message Importance="high"
+             Text="[ScanAndScale.Core] Scale DLL da copy: %(Filename)%(Extension)"
+             Condition="'@(_CopiedScaleDlls)' != ''"/>
+
+  </Target>
+
+  <!--
+  ============================================================
+  TARGET 2: IncludeScaleDllsForConsumers
+  ============================================================
+  Khi project khac (WpfSample, WinFormsApp, ...) reference
+  ScanAndScale.Core, MSBuild se goi GetCopyToOutputDirectoryItems
+  tren ScanAndScale.Core de biet co nhung file nao can copy.
+
+  Target nay chen Scale DLL vao danh sach do, nen consumer
+  project se tu dong copy Scale_*.dll vao output cua no.
+
+  Ket qua: WpfSample\bin\Debug\net8.0-windows\ tu co Scale_*.dll
+  MA KHONG can them cau hinh gi vao WpfSample.csproj!
+  ============================================================
+  -->
+  <Target Name="IncludeScaleDllsForConsumers"
+          BeforeTargets="GetCopyToOutputDirectoryItems"
+          DependsOnTargets="CopyScaleDllsToOutput">
+
+    <ItemGroup>
+      <None Include="$(OutputPath)Scale_DIGI.dll"
+            Condition="Exists('$(OutputPath)Scale_DIGI.dll')">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Link>Scale_DIGI.dll</Link>
+        <Visible>false</Visible>
+      </None>
+      <None Include="$(OutputPath)Scale_IND_KG.dll"
+            Condition="Exists('$(OutputPath)Scale_IND_KG.dll')">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Link>Scale_IND_KG.dll</Link>
+        <Visible>false</Visible>
+      </None>
+      <None Include="$(OutputPath)Scale_SampleReading.dll"
+            Condition="Exists('$(OutputPath)Scale_SampleReading.dll')">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Link>Scale_SampleReading.dll</Link>
+        <Visible>false</Visible>
+      </None>
+      <None Include="$(OutputPath)Scale_Vibra_HAW30.dll"
+            Condition="Exists('$(OutputPath)Scale_Vibra_HAW30.dll')">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Link>Scale_Vibra_HAW30.dll</Link>
+        <Visible>false</Visible>
+      </None>
+      <None Include="$(OutputPath)Scale_Vibra_SJ6200.dll"
+            Condition="Exists('$(OutputPath)Scale_Vibra_SJ6200.dll')">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Link>Scale_Vibra_SJ6200.dll</Link>
+        <Visible>false</Visible>
+      </None>
+    </ItemGroup>
+
+  </Target>
 
 </Project>
