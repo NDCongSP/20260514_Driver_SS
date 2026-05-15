@@ -495,7 +495,7 @@ namespace ScanAndScale.Core.Drivers
                 var rawWeight = (double?)parameters[0] ?? 0.0;
                 _isStable = (bool?)parameters[1] ?? false;
                 _isTare = (bool?)parameters[2] ?? false;
-                _unit = (string?)parameters[3] ?? "KG";
+                _unit = (string?)parameters[3] ?? "Kg";
                 _weightKg = rawWeight;
             }
             catch (Exception ex)

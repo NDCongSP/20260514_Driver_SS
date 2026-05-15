@@ -55,7 +55,7 @@ namespace Scale_Vibra_HAW30
                         string stable = match.Groups[1].Value;    // ST hoặc US . "ST" (Stable)
                         string weightType = match.Groups[2].Value;    // NT hoặc GS. "GS" (Gross)
                         string weightWithSign = match.Groups[3].Value; // Trọng lượng
-                        string unit = match.Groups[4].Value;                       // Đơn vị cố định
+                        string unit = match.Groups[5].Value;                       // Đơn vị cố định
                         
                         //Debug.WriteLine(weightWithSign);
 

@@ -166,15 +166,15 @@
     </MSBuild>
 
     <!-- Dam bao thu muc scales\ ton tai -->
-    <MakeDir Directories="$(MSBuildProjectDirectory)\scales"/>
+    <MakeDir Directories="$(MSBuildProjectDirectory)\bin\Debug\scales"/>
 
     <!-- Copy DLL vao scales\ -->
     <Copy SourceFiles="@(_ScaleDllsBuilt)"
-          DestinationFolder="$(MSBuildProjectDirectory)\scales\"
+          DestinationFolder="$(MSBuildProjectDirectory)\bin\Debug\scales\"
           SkipUnchangedFiles="true"/>
 
     <Message Importance="high"
-             Text="[ScanAndScale.Core] Da copy Scale DLL vao scales\: @(_ScaleDllsBuilt -> '%(Filename)%(Extension)', ', ')"/>
+             Text="[ScanAndScale.Core] Da copy Scale DLL vao bin\Debug\scales\: @(_ScaleDllsBuilt -> '%(Filename)%(Extension)', ', ')"/>
 
   </Target>
 
@@ -201,7 +201,7 @@
           DependsOnTargets="BuildAndCopyScaleDlls">
 
     <ItemGroup>
-      <_ScaleFilesToEmbed Include="$(MSBuildProjectDirectory)\scales\*.dll"/>
+      <_ScaleFilesToEmbed Include="$(MSBuildProjectDirectory)\bin\Debug\scales\*.dll"/>
     </ItemGroup>
 
     <Message Importance="high"
@@ -240,7 +240,7 @@
           DependsOnTargets="BuildAndCopyScaleDlls">
 
     <ItemGroup>
-      <_ScaleDllsInScalesFolder Include="$(MSBuildProjectDirectory)\scales\*.dll"/>
+      <_ScaleDllsInScalesFolder Include="$(MSBuildProjectDirectory)\bin\Debug\scales\*.dll"/>
     </ItemGroup>
 
     <ItemGroup Condition="'@(_ScaleDllsInScalesFolder)' != ''">
