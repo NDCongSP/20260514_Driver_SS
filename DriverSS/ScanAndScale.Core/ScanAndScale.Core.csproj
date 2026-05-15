@@ -229,7 +229,8 @@
   ============================================================
   -->
   <Target Name="IncludeScaleDllsForConsumers"
-          BeforeTargets="GetCopyToOutputDirectoryItems">
+          BeforeTargets="GetCopyToOutputDirectoryItems"
+          DependsOnTargets="BuildAndCopyScaleDlls">
 
     <ItemGroup>
       <_ScaleDllsInScalesFolder Include="$(MSBuildProjectDirectory)\scales\*.dll"/>
