@@ -517,8 +517,9 @@ namespace ScanAndScale.Core.Drivers
             if (_currentDataValue.Equals(newValue))
                 return;
 
+            var oldValue = _currentDataValue;
             _currentDataValue = newValue;
-            _dataValueChanged?.Invoke(this, new DataValueChangedEventArgs(newValue));
+            _dataValueChanged?.Invoke(this, new DataValueChangedEventArgs(oldValue, newValue));
         }
 
         // ===================================================
