@@ -9,25 +9,24 @@
 //   4. Gọi hàm GetWeight() trong DLL model cân để parse dữ liệu
 //   5. Bắn sự kiện DataValueChanged với giá trị đã parse
 //
-// DLL model cân (Scale_DIGI.dll, v.v.) phải nằm cùng thư mục
-// với ứng dụng đang chạy (hoặc chỉ định đường dẫn trong ScaleConfig).
+// AUTO-RECONNECT:
+//   Khi TCP mất kết nối (Connected=false hoặc exception khi đọc),
+//   driver dừng read-timer, chuyển sang Reconnecting và thử kết nối
+//   lại TCP mỗi 3 giây. Khi thành công, read-timer được khởi động lại.
 //
 // QUAN TRỌNG VỀ THREAD:
 //   Timer callback và đọc dữ liệu chạy trên ThreadPool thread.
 //   Trong WPF: dùng Application.Current.Dispatcher.Invoke(...)
-//   Trong WinForms: dùng control.Invoke(...)
 // ============================================================
 
 using ScanAndScale.Core.Models;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-// System.Runtime.Loader chỉ có trên .NET Core / .NET 5+ (không có trên .NET Framework)
 #if !NETFRAMEWORK
 using System.Runtime.Loader;
 #endif
@@ -35,101 +34,60 @@ using System.Runtime.Loader;
 namespace ScanAndScale.Core.Drivers
 {
     /// <summary>
-    /// Driver đọc giá trị cân điện tử qua kết nối TCP/IP.
-    /// <para>
+    /// Driver đọc giá trị cân điện tử qua TCP/IP.
     /// KHÔNG phải Singleton — mỗi cân là một instance riêng biệt.
-    /// Một ứng dụng có thể có nhiều cân cùng lúc (nhiều IP khác nhau).
-    /// </para>
-    /// <para>
-    /// Cách dùng:
-    /// <code>
-    ///   var driver = new ScaleDriver();
-    ///   driver.DataValueChanged += (s, e) => {
-    ///     double weight = (double)(e.NewValue.Value ?? 0.0);
-    ///     Console.WriteLine($"Cân: {weight} KG");
-    ///   };
-    ///   driver.Initialize(new ScaleConfig {
-    ///       Enable = true,
-    ///       IP = "192.168.80.237",
-    ///       Port = 23,
-    ///       ModelName = "Scale_DIGI",
-    ///       TimeScanMs = 400
-    ///   });
-    ///   // Khi thoát:
-    ///   driver.Dispose();
-    /// </code>
-    /// </para>
+    /// Hỗ trợ tự động kết nối lại khi mất kết nối TCP.
     /// </summary>
     public class ScaleDriver : IDisposable
     {
         // ===================================================
-        // FIELDS — Biến nội bộ
+        // FIELDS
         // ===================================================
+        private TcpClient?              _tcpClient;
+        private Socket?                 _socket;
+        private System.Timers.Timer?    _readTimer;
+        private ScaleConfig?            _config;
+        private object?                 _scaleModelInstance;
+        private MethodInfo?             _getWeightMethod;
+        private DataValue               _currentDataValue = new DataValue(DriverStatus.Unknown, null);
 
-        // Kết nối TCP đến cân
-        private TcpClient? _tcpClient;
-        private Socket? _socket;
+        private double  _weightKg;
+        private bool    _isStable;
+        private bool    _isTare;
+        private string  _unit     = "KG";
 
-        // Timer đọc dữ liệu định kỳ
-        private System.Timers.Timer? _readTimer;
-
-        // Config hiện tại
-        private ScaleConfig? _config;
-
-        // Reflection objects cho model cân (load từ DLL)
-        private object? _scaleModelInstance;     // Instance của class ScaleReading
-        private MethodInfo? _getWeightMethod;    // Phương thức GetWeight
-
-        // Trạng thái hiện tại
-        private DataValue _currentDataValue = new DataValue(DriverStatus.Unknown, null);
-
-        // Giá trị parse từ cân
-        private double _weightKg;       // Giá trị cân (KG)
-        private bool _isStable;         // Cân ổn định không
-        private bool _isTare;           // Cân đang ở trạng thái tare không
-        private string _unit = "KG";    // Đơn vị
-
-        // Lock object cho timer (tránh đọc đồng thời)
         private readonly object _timerLock = new object();
+        private bool            _disposed  = false;
 
-        // Đã dispose chưa
-        private bool _disposed = false;
+        // ── Auto-reconnect ──────────────────────────────────
+        private CancellationTokenSource? _reconnectCts;
+        private volatile bool _isReconnecting = false;
+        private const int ReconnectDelayMs = 3000;
+        private const int ConnectTimeoutMs = 5000;
 
-        // Dữ liệu thô nhận được (để debug)
         public string? RawData { get; private set; }
 
         // ===================================================
-        // PROPERTIES CÔNG KHAI
+        // PROPERTIES
         // ===================================================
-
-        /// <summary>Giá trị cân hiện tại (DataValue.Value = double kg).</summary>
         public DataValue CurrentValue => _currentDataValue;
-
-        /// <summary>Cân có đang kết nối không.</summary>
-        public bool IsConnected => _tcpClient?.Connected == true;
-
-        /// <summary>Cân đang ổn định không (Stable flag từ protocol cân).</summary>
-        public bool IsStable => _isStable;
-
-        /// <summary>Cân đang ở trạng thái Tare không.</summary>
-        public bool IsTare => _isTare;
-
-        /// <summary>Đơn vị hiện tại của cân (KG, G, TON).</summary>
-        public string Unit => _unit;
+        public bool      IsConnected  => _tcpClient?.Connected == true;
+        public bool      IsStable     => _isStable;
+        public bool      IsTare       => _isTare;
+        public string    Unit         => _unit;
 
         // ===================================================
-        // EVENTS
+        // EVENT
         // ===================================================
-
         private EventHandler<DataValueChangedEventArgs>? _dataValueChanged;
 
         /// <summary>
-        /// Sự kiện kích hoạt khi giá trị cân thay đổi.
-        /// <para>⚠️ Chạy trên ThreadPool thread — cần dispatch về UI thread khi cập nhật UI.</para>
+        /// Fired khi giá trị cân hoặc trạng thái thay đổi.
+        /// ⚠️ Chạy trên ThreadPool — dispatch về UI thread khi cập nhật UI.
         /// </summary>
         public event EventHandler<DataValueChangedEventArgs> DataValueChanged
         {
-            add => _dataValueChanged += value;
+            add    => _dataValueChanged += value;
             remove => _dataValueChanged -= value;
         }
 
@@ -139,25 +97,20 @@ namespace ScanAndScale.Core.Drivers
         public ScaleDriver() { }
 
         // ===================================================
-        // KHỞI TẠO
+        // INITIALIZE
         // ===================================================
 
-        /// <summary>
-        /// Khởi tạo Scale Driver: tải DLL model cân, kết nối TCP, và bắt đầu timer đọc.
-        /// </summary>
-        /// <param name="config">Cấu hình cân. Null = dùng mặc định.</param>
+        /// <summary>Khởi tạo driver: tải DLL model, kết nối TCP, start timer.</summary>
         public void Initialize(ScaleConfig? config = null)
         {
             _config = config ?? new ScaleConfig();
 
-            // Kiểm tra enable
             if (!_config.Enable)
             {
                 LogInfo("ScaleDriver bị vô hiệu hóa (Enable=false).");
                 return;
             }
 
-            // Bước 1: Tải DLL model cân và chuẩn bị reflection
             if (!LoadScaleModel())
             {
                 LogInfo($"Không tải được DLL model cân: {_config.ModelName}.dll");
@@ -165,37 +118,18 @@ namespace ScanAndScale.Core.Drivers
                 return;
             }
 
-            // Bước 2: Kết nối TCP đến cân (async để không block)
             _ = ConnectAsync();
         }
 
         // ===================================================
-        // TẢI DLL MODEL CÂN (Reflection)
+        // LOAD DLL MODEL CÂN
         // ===================================================
-
-        /// <summary>
-        /// Tải DLL model cân tương ứng với <see cref="ScaleConfig.ModelName"/>.
-        /// Dùng Reflection để gọi hàm GetWeight() trong DLL đó.
-        /// <para>
-        /// Ưu tiên 1 — Embedded resource: Scale DLL được nhúng vào ScanAndScale.Core.dll
-        ///   khi build (EmbeddedResource trong .csproj). Không cần file bên ngoài.
-        /// Ưu tiên 2 — File trên disk: tìm trong thư mục .exe / thư mục hiện tại.
-        ///   Dùng khi Scale DLL được deploy thủ công hoặc trong môi trường dev.
-        /// </para>
-        /// <para>
-        /// DLL cần có class: {ModelName}.ScaleReading
-        /// với method: GetWeight(out double?, out bool?, out bool?, out string, string)
-        /// </para>
-        /// </summary>
         private bool LoadScaleModel()
         {
             try
             {
                 string dllFileName = $"{_config!.ModelName}.dll";
 
-                // ── Ưu tiên 1: Load từ EmbeddedResource ─────────────────────────────
-                // Scale DLL được nhúng vào ScanAndScale.Core.dll khi build.
-                // Cách này hoạt động ngay cả khi không có file Scale_*.dll bên ngoài.
                 var assembly = LoadAssemblyFromEmbeddedResource(dllFileName);
 
                 if (assembly != null)
@@ -204,24 +138,18 @@ namespace ScanAndScale.Core.Drivers
                 }
                 else
                 {
-                    // Diagnostic: liệt kê resource thực sự có trong Core.dll
-                    // Nếu danh sách rỗng → EmbedScaleDlls target chưa nhúng được DLL.
                     var available = typeof(ScaleDriver).Assembly.GetManifestResourceNames();
                     if (available.Length == 0)
-                        LogInfo($"[WARN] Không có embedded resource nào trong Core.dll — EmbedScaleDlls target có thể chưa chạy đúng. Cần Rebuild Solution.");
+                        LogInfo("[WARN] Không có embedded resource — cần Rebuild Solution.");
                     else
-                        LogInfo($"[WARN] Không tìm thấy '{dllFileName}'. Resources trong Core.dll: {string.Join(", ", available)}");
+                        LogInfo($"[WARN] Không tìm thấy '{dllFileName}'. Resources: {string.Join(", ", available)}");
 
-                    // ── Ưu tiên 2: Load từ file trên disk (fallback) ─────────────────
-                    // Dùng khi Scale DLL không được nhúng (build cũ, hoặc deploy thủ công).
                     string dllFullPath = FindDllPath(dllFileName);
-
                     if (!File.Exists(dllFullPath))
                     {
-                        LogInfo($"Không tìm thấy embedded resource hoặc file: {dllFileName}");
+                        LogInfo($"Không tìm thấy file: {dllFileName}");
                         return false;
                     }
-
 #if NETFRAMEWORK
                     assembly = Assembly.LoadFrom(dllFullPath);
 #else
@@ -230,29 +158,26 @@ namespace ScanAndScale.Core.Drivers
                     LogInfo($"Load model cân từ file: {dllFullPath}");
                 }
 
-                // ── Lấy class ScaleReading và method GetWeight via Reflection ────────
-                string typeName = $"{_config.ModelName}.ScaleReading";
-                var scaleType = assembly.GetType(typeName);
-
+                string typeName  = $"{_config.ModelName}.ScaleReading";
+                var scaleType    = assembly.GetType(typeName);
                 if (scaleType == null)
                 {
-                    LogInfo($"Không tìm thấy class '{typeName}' trong DLL.");
+                    LogInfo($"Không tìm thấy class '{typeName}'.");
                     return false;
                 }
 
-                // Signature: GetWeight(out double?, out bool?, out bool?, out string, string)
                 _getWeightMethod = scaleType.GetMethod("GetWeight", new Type[]
                 {
-                    typeof(double?).MakeByRefType(),   // out double? WeightValue
-                    typeof(bool?).MakeByRefType(),     // out bool? Stable
-                    typeof(bool?).MakeByRefType(),     // out bool? Tare
-                    typeof(string).MakeByRefType(),    // out string Unit
-                    typeof(string)                     // string rawData (input)
+                    typeof(double?).MakeByRefType(),
+                    typeof(bool?).MakeByRefType(),
+                    typeof(bool?).MakeByRefType(),
+                    typeof(string).MakeByRefType(),
+                    typeof(string)
                 });
 
                 if (_getWeightMethod == null)
                 {
-                    LogInfo($"Không tìm thấy method 'GetWeight' với signature đúng trong '{typeName}'.");
+                    LogInfo($"Không tìm thấy method 'GetWeight' trong '{typeName}'.");
                     return false;
                 }
 
@@ -262,60 +187,34 @@ namespace ScanAndScale.Core.Drivers
             }
             catch (Exception ex)
             {
-                LogError(ex, "ScaleDriver.LoadScaleModel");
+                LogError(ex, "LoadScaleModel");
                 return false;
             }
         }
 
-        /// <summary>
-        /// Thử load assembly từ EmbeddedResource trong ScanAndScale.Core.dll.
-        /// <para>
-        /// Scale DLL được nhúng với LogicalName = "Scale_DIGI.dll" (tên file đơn giản,
-        /// không có namespace prefix) bởi target EmbedScaleDlls trong .csproj.
-        /// </para>
-        /// </summary>
-        /// <param name="dllFileName">Tên file DLL, ví dụ "Scale_DIGI.dll"</param>
-        /// <returns>Assembly nếu tìm thấy embedded resource, null nếu không có.</returns>
         private static System.Reflection.Assembly? LoadAssemblyFromEmbeddedResource(string dllFileName)
         {
             try
             {
-                // Lấy stream của embedded resource từ ScanAndScale.Core.dll
-                // LogicalName trong .csproj được đặt là "Scale_DIGI.dll" (tên file đơn giản)
                 var coreAssembly = typeof(ScaleDriver).Assembly;
                 using var stream = coreAssembly.GetManifestResourceStream(dllFileName);
+                if (stream == null) return null;
 
-                if (stream == null)
-                    return null; // Không có embedded resource — dùng fallback file
-
-                // Đọc toàn bộ bytes của DLL
-                var bytes = new byte[stream.Length];
-                var totalRead = 0;
+                var bytes      = new byte[stream.Length];
+                var totalRead  = 0;
                 while (totalRead < bytes.Length)
                 {
                     var read = stream.Read(bytes, totalRead, bytes.Length - totalRead);
                     if (read == 0) break;
                     totalRead += read;
                 }
-
-                // Load assembly từ byte array — không cần file trên disk
-                // Scale DLL chỉ dùng BCL (Regex, Math) nên load từ bytes hoạt động tốt
                 return System.Reflection.Assembly.Load(bytes);
             }
-            catch
-            {
-                return null; // Lỗi khi load embedded → fallback sang file
-            }
+            catch { return null; }
         }
 
-        /// <summary>
-        /// Tìm đường dẫn đầy đủ của file DLL trên disk.
-        /// Dùng làm fallback khi không có embedded resource.
-        /// Ưu tiên thư mục của process, sau đó thư mục hiện tại.
-        /// </summary>
         private static string FindDllPath(string dllFileName)
         {
-            // Thử 1: Cùng thư mục với file thực thi của ứng dụng
             string? exeDir = Path.GetDirectoryName(
                 System.Reflection.Assembly.GetEntryAssembly()?.Location ?? "");
             if (!string.IsNullOrEmpty(exeDir))
@@ -323,125 +222,102 @@ namespace ScanAndScale.Core.Drivers
                 string path1 = Path.Combine(exeDir, dllFileName);
                 if (File.Exists(path1)) return path1;
             }
-
-            // Thử 2: Thư mục hiện tại
-            string path2 = Path.GetFullPath(dllFileName);
-            return path2;
+            return Path.GetFullPath(dllFileName);
         }
 
         // ===================================================
-        // KẾT NỐI TCP
+        // TCP CONNECT
         // ===================================================
 
-        /// <summary>
-        /// Kết nối TCP đến địa chỉ IP:Port của cân (async).
-        /// Sau khi kết nối thành công, tự động start timer đọc dữ liệu.
-        /// </summary>
+        /// <summary>Kết nối TCP lần đầu, sau đó start read-timer.</summary>
         private async Task ConnectAsync()
         {
             try
             {
                 LogInfo($"Đang kết nối TCP đến {_config!.IP}:{_config.Port}...");
-
                 _tcpClient = new TcpClient();
 
-                // Timeout kết nối 5 giây
                 var connectTask = _tcpClient.ConnectAsync(_config.IP, _config.Port);
-                var timeoutTask = Task.Delay(5000);
+                var timeoutTask = Task.Delay(ConnectTimeoutMs);
 
                 if (await Task.WhenAny(connectTask, timeoutTask) == timeoutTask)
                 {
-                    LogInfo($"Kết nối TCP timeout sau 5 giây. IP: {_config.IP}");
+                    LogInfo($"Kết nối TCP timeout ({ConnectTimeoutMs}ms). IP: {_config.IP}");
                     SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
                     return;
                 }
 
-                await connectTask; // Chắc chắn task hoàn thành (có thể throw exception)
-
+                await connectTask;
                 _socket = _tcpClient.Client;
 
                 LogInfo($"Kết nối TCP thành công: {_config.IP}:{_config.Port}");
-
-                // Bắt đầu timer đọc dữ liệu định kỳ
                 StartReadTimer();
             }
             catch (Exception ex)
             {
-                LogError(ex, "ScaleDriver.ConnectAsync");
+                LogError(ex, "ConnectAsync");
                 SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
             }
         }
 
         // ===================================================
-        // TIMER ĐỌC DỮ LIỆU ĐỊNH KỲ
+        // READ TIMER
         // ===================================================
-
-        /// <summary>Bắt đầu timer đọc dữ liệu từ cân.</summary>
         private void StartReadTimer()
         {
-            _readTimer = new System.Timers.Timer(_config!.TimeScanMs);
+            _readTimer          = new System.Timers.Timer(_config!.TimeScanMs);
             _readTimer.Elapsed += OnReadTimerElapsed;
-            _readTimer.AutoReset = false; // Tắt auto-reset, tự start lại sau mỗi lần đọc
+            _readTimer.AutoReset = false;   // Manual restart sau mỗi lần đọc
             _readTimer.Start();
-            LogInfo($"Timer đọc cân khởi động (interval: {_config.TimeScanMs}ms).");
+            LogInfo($"Read timer start (interval={_config.TimeScanMs}ms).");
         }
 
-        /// <summary>
-        /// Callback của timer — được gọi mỗi chu kỳ TimeScanMs.
-        /// ⚠️ Chạy trên ThreadPool thread!
-        /// </summary>
         private async void OnReadTimerElapsed(object? sender, System.Timers.ElapsedEventArgs e)
         {
-            // Sử dụng lock để tránh đọc đồng thời khi timer chạy chậm hơn interval
             if (!Monitor.TryEnter(_timerLock)) return;
 
             try
             {
-                // Kiểm tra trạng thái kết nối TCP
+                // Kiểm tra kết nối TCP
                 if (_tcpClient == null || !_tcpClient.Connected)
                 {
+                    LogInfo("TCP mất kết nối — khởi động auto-reconnect.");
                     SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
-                    return;
+                    StartReconnectLoop();   // Reconnect loop sẽ restart timer sau khi thành công
+                    return;                 // Không restart timer ở đây
                 }
 
-                // Đọc dữ liệu từ cân
                 await ReadScaleDataAsync();
             }
             catch (Exception ex)
             {
                 LogError(ex, "OnReadTimerElapsed");
                 SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
+                StartReconnectLoop();
+                return;
             }
             finally
             {
                 Monitor.Exit(_timerLock);
-
-                // Restart timer (sau khi đọc xong mới đọc lại, tránh chồng chéo)
-                if (!_disposed && _readTimer != null)
-                {
-                    _readTimer.Start();
-                }
             }
+
+            // Restart timer chỉ khi không đang reconnect
+            if (!_disposed && !_isReconnecting && _readTimer != null)
+                _readTimer.Start();
         }
 
         // ===================================================
-        // ĐỌC VÀ PARSE DỮ LIỆU CÂN
+        // READ & PARSE
         // ===================================================
-
-        /// <summary>
-        /// Đọc một dòng dữ liệu thô từ TCP stream và gọi DLL model cân để parse.
-        /// </summary>
         private async Task ReadScaleDataAsync()
         {
             try
             {
-                // Tạo NetworkStream từ socket đang kết nối
                 using var stream = new NetworkStream(_socket!);
                 using var reader = new StreamReader(stream);
 
-                // Đọc một dòng dữ liệu từ cân (ReadLine chờ đến khi gặp '\n')
-                var readTask = reader.ReadLineAsync();
-                var timeoutTask = Task.Delay(3000); // Timeout 3 giây
+                var readTask    = reader.ReadLineAsync();
+                var timeoutTask = Task.Delay(3000);
 
                 if (await Task.WhenAny(readTask, timeoutTask) == timeoutTask)
                 {
@@ -450,87 +326,140 @@ namespace ScanAndScale.Core.Drivers
                 }
 
                 RawData = await readTask;
+                if (string.IsNullOrEmpty(RawData)) return;
 
-                if (string.IsNullOrEmpty(RawData))
-                    return;
-
-                // Gọi DLL model cân để parse dữ liệu thô
                 ParseScaleData(RawData);
-
-                // Cập nhật giá trị và bắn sự kiện
                 SetDataValue(new DataValue(DriverStatus.Connected, _weightKg));
             }
             catch (Exception ex)
             {
+                // Lỗi network → báo Disconnected và khởi động reconnect
                 LogError(ex, "ReadScaleDataAsync");
+                SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
+                StartReconnectLoop();
             }
         }
 
-        /// <summary>
-        /// Gọi method GetWeight() trong DLL model cân để parse dữ liệu thô.
-        /// Dùng Reflection vì mỗi model cân có DLL riêng với logic parse khác nhau.
-        /// </summary>
-        /// <param name="rawData">Chuỗi dữ liệu thô nhận từ cân qua TCP.</param>
         private void ParseScaleData(string rawData)
         {
             try
             {
-                if (_getWeightMethod == null || _scaleModelInstance == null)
-                    return;
+                if (_getWeightMethod == null || _scaleModelInstance == null) return;
 
-                // Chuẩn bị các tham số (out params phải khởi tạo trước)
-                object?[] parameters = new object?[]
-                {
-                    null,   // out double? WeightValue
-                    null,   // out bool? Stable
-                    null,   // out bool? Tare
-                    "",     // out string Unit
-                    rawData // string rawData (input)
-                };
-
-                // Gọi GetWeight() trong DLL model cân
+                object?[] parameters = { null, null, null, "", rawData };
                 _getWeightMethod.Invoke(_scaleModelInstance, parameters);
 
-                // Lấy kết quả từ các out parameters
-                var rawWeight = (double?)parameters[0] ?? 0.0;
-                _isStable = (bool?)parameters[1] ?? false;
-                _isTare = (bool?)parameters[2] ?? false;
-                _unit = (string?)parameters[3] ?? "Kg";
-                _weightKg = rawWeight;
+                _weightKg = (double?)parameters[0] ?? 0.0;
+                _isStable = (bool?)parameters[1]   ?? false;
+                _isTare   = (bool?)parameters[2]   ?? false;
+                _unit     = (string?)parameters[3]  ?? "Kg";
             }
             catch (Exception ex)
             {
-                LogError(ex, "ScaleDriver.ParseScaleData");
+                LogError(ex, "ParseScaleData");
             }
         }
 
         // ===================================================
-        // CẬP NHẬT GIÁ TRỊ & BẮN SỰ KIỆN
+        // AUTO-RECONNECT LOOP
         // ===================================================
 
         /// <summary>
-        /// Cập nhật <see cref="_currentDataValue"/> và bắn sự kiện <see cref="DataValueChanged"/>
-        /// nếu giá trị hoặc trạng thái thực sự thay đổi.
+        /// Dừng read-timer, chuyển sang Reconnecting và thử kết nối lại TCP
+        /// mỗi <see cref="ReconnectDelayMs"/> ms cho đến khi thành công hoặc dispose.
+        /// Sau khi kết nối lại thành công, read-timer được khởi động lại.
         /// </summary>
-        private void SetDataValue(DataValue newValue)
+        private void StartReconnectLoop()
         {
-            if (_currentDataValue.Equals(newValue))
-                return;
+            if (_isReconnecting) return;
+            _isReconnecting = true;
 
-            var oldValue = _currentDataValue;
-            _currentDataValue = newValue;
-            _dataValueChanged?.Invoke(this, new DataValueChangedEventArgs(oldValue, newValue));
+            // Dừng read-timer trước khi bắt đầu reconnect
+            _readTimer?.Stop();
+
+            _reconnectCts?.Cancel();
+            _reconnectCts = new CancellationTokenSource();
+            var token = _reconnectCts.Token;
+
+            Task.Run(async () =>
+            {
+                LogInfo($"[Reconnect] Bắt đầu auto-reconnect Scale (delay={ReconnectDelayMs}ms)...");
+                SetDataValue(new DataValue(DriverStatus.Reconnecting, 0.0));
+
+                while (!token.IsCancellationRequested && !_disposed)
+                {
+                    try { await Task.Delay(ReconnectDelayMs, token); }
+                    catch (OperationCanceledException) { break; }
+
+                    if (token.IsCancellationRequested || _disposed) break;
+
+                    LogInfo("[Reconnect] Đang thử kết nối lại TCP cân...");
+                    bool ok = await TryReconnectTcpAsync();
+
+                    if (ok)
+                    {
+                        LogInfo("[Reconnect] Kết nối lại Scale thành công — restart read-timer.");
+                        _isReconnecting = false;
+                        StartReadTimer();   // Tiếp tục đọc dữ liệu
+                        return;
+                    }
+
+                    LogInfo($"[Reconnect] Thất bại. Thử lại sau {ReconnectDelayMs}ms...");
+                    // Giữ nguyên trạng thái Reconnecting
+                }
+
+                _isReconnecting = false;
+                LogInfo("[Reconnect] Vòng lặp auto-reconnect Scale kết thúc.");
+            }, token);
+        }
+
+        /// <summary>Đóng kết nối cũ và thử kết nối TCP mới.</summary>
+        private async Task<bool> TryReconnectTcpAsync()
+        {
+            try
+            {
+                // Đóng socket/client cũ
+                try { _socket?.Close();   } catch { /* ignored */ }
+                try { _tcpClient?.Close(); _tcpClient?.Dispose(); } catch { /* ignored */ }
+                _socket    = null;
+                _tcpClient = null;
+
+                _tcpClient = new TcpClient();
+                var connectTask = _tcpClient.ConnectAsync(_config!.IP, _config.Port);
+                var timeoutTask = Task.Delay(ConnectTimeoutMs);
+
+                if (await Task.WhenAny(connectTask, timeoutTask) == timeoutTask)
+                {
+                    LogInfo($"[Reconnect] TCP timeout ({ConnectTimeoutMs}ms). IP: {_config.IP}");
+                    return false;
+                }
+
+                await connectTask;
+                _socket = _tcpClient.Client;
+
+                SetDataValue(new DataValue(DriverStatus.Connected, 0.0));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogError(ex, "TryReconnectTcpAsync");
+                return false;
+            }
         }
 
         // ===================================================
-        // NGẮT KẾT NỐI
+        // DISCONNECT
         // ===================================================
 
-        /// <summary>Ngắt kết nối TCP và dừng timer đọc.</summary>
+        /// <summary>Dừng timer, hủy reconnect loop và đóng kết nối TCP.</summary>
         public void Disconnect()
         {
             try
             {
+                // Dừng reconnect loop trước
+                _reconnectCts?.Cancel();
+                _isReconnecting = false;
+
                 _readTimer?.Stop();
                 _readTimer?.Dispose();
                 _readTimer = null;
@@ -547,31 +476,41 @@ namespace ScanAndScale.Core.Drivers
             }
             catch (Exception ex)
             {
-                LogError(ex, "ScaleDriver.Disconnect");
+                LogError(ex, "Disconnect");
             }
+        }
+
+        // ===================================================
+        // SET DATA VALUE
+        // ===================================================
+        private void SetDataValue(DataValue newValue)
+        {
+            if (_currentDataValue.Equals(newValue)) return;
+            var oldValue      = _currentDataValue;
+            _currentDataValue = newValue;
+            _dataValueChanged?.Invoke(this, new DataValueChangedEventArgs(oldValue, newValue));
         }
 
         // ===================================================
         // DISPOSE
         // ===================================================
-
-        /// <inheritdoc/>
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
+
+            _reconnectCts?.Cancel();
+            _reconnectCts?.Dispose();
+            _reconnectCts = null;
+
             Disconnect();
             GC.SuppressFinalize(this);
         }
 
         // ===================================================
-        // HELPERS — LOG
+        // LOG HELPERS
         // ===================================================
-
-        private static void LogInfo(string msg) =>
-            Debug.WriteLine($"[ScaleDriver] {msg}");
-
-        private static void LogError(Exception ex, string context) =>
-            Debug.WriteLine($"[ScaleDriver][ERROR] {context}: {ex.Message}");
+        private static void LogInfo(string msg)                => Debug.WriteLine($"[ScaleDriver] {msg}");
+        private static void LogError(Exception ex, string ctx) => Debug.WriteLine($"[ScaleDriver][ERROR] {ctx}: {ex.Message}");
     }
 }

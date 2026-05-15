@@ -8,6 +8,10 @@
 //   3. Parse dữ liệu bằng Regex để lấy mã số thẻ
 //   4. Bắn sự kiện DataValueChanged cho subscriber
 //
+// AUTO-RECONNECT:
+//   Khi SerialPort mất kết nối (exception trong DataReceived),
+//   driver tự động chuyển sang Reconnecting và thử lại mỗi 3 giây.
+//
 // QUAN TRỌNG VỀ THREAD:
 //   SerialPort.DataReceived chạy trên ThreadPool thread.
 //   Trong WPF: dùng Application.Current.Dispatcher.Invoke(...)
@@ -16,178 +20,130 @@
 
 using ScanAndScale.Core.Models;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO.Ports;
-using System.Linq;
 using System.Management;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Win32;
 
 namespace ScanAndScale.Core.Drivers
 {
     /// <summary>
     /// Driver đọc thẻ RFID qua cổng Serial COM.
-    /// <para>
-    /// Singleton pattern — toàn ứng dụng dùng chung một instance.
-    /// </para>
-    /// <para>
-    /// Cách dùng:
-    /// <code>
-    ///   var driver = RfidDriver.Instance;
-    ///   driver.Initialize(new RfidConfig {
-    ///       Enable = true,
-    ///       AutoFindCom = true,
-    ///       DeviceCaption = "Pongee",
-    ///       DeviceManufacturer = "Prolific"
-    ///   });
-    ///   driver.DataValueChanged += (s, e) => {
-    ///     Console.WriteLine("RFID: " + e.NewValue.Value);
-    ///   };
-    ///   // Khi thoát:
-    ///   driver.Dispose();
-    /// </code>
-    /// </para>
+    /// Singleton — toàn ứng dụng dùng chung một instance.
+    /// Hỗ trợ tự động kết nối lại khi mất kết nối.
     /// </summary>
     public sealed class RfidDriver : IDisposable
     {
         // ===================================================
-        // SINGLETON PATTERN
+        // SINGLETON
         // ===================================================
         private static RfidDriver? _instance;
         private static readonly object _instanceLock = new object();
 
-        /// <summary>Instance duy nhất của RfidDriver.</summary>
         public static RfidDriver Instance
         {
             get
             {
                 if (_instance == null)
-                {
                     lock (_instanceLock)
-                    {
                         if (_instance == null)
                             _instance = new RfidDriver();
-                    }
-                }
                 return _instance;
             }
         }
 
         // ===================================================
-        // FIELDS — Biến nội bộ
+        // FIELDS
         // ===================================================
+        private SerialPort?  _serialPort;
+        private RfidConfig?  _config;
+        private Regex?       _dataRegex;
+        private DataValue    _currentDataValue = new DataValue(DriverStatus.Unknown, null);
+        private bool         _disposed         = false;
 
-        // SerialPort object — kết nối đến thiết bị RFID qua COM
-        private SerialPort? _serialPort;
-
-        // Config hiện tại
-        private RfidConfig? _config;
-
-        // Regex để parse mã thẻ từ chuỗi nhận được
-        private Regex? _dataRegex;
-
-        // Giá trị RFID gần nhất
-        private DataValue _currentDataValue = new DataValue(DriverStatus.Unknown, null);
-
-        // Đã dispose chưa
-        private bool _disposed = false;
-
-        // Lock object để tránh race condition khi mở/đóng port
         private readonly object _portLock = new object();
+
+        // ── Auto-reconnect ──────────────────────────────────
+        private CancellationTokenSource? _reconnectCts;
+        private volatile bool _isReconnecting = false;
+        private const int ReconnectDelayMs = 3000;
 
         // ===================================================
         // PROPERTIES
         // ===================================================
-
-        /// <summary>Tên cổng COM đang được dùng.</summary>
-        public string? CurrentComPort => _serialPort?.PortName;
-
-        /// <summary>SerialPort đang mở không.</summary>
-        public bool IsConnected => _serialPort?.IsOpen == true;
-
-        /// <summary>Giá trị RFID hiện tại.</summary>
-        public DataValue CurrentValue => _currentDataValue;
+        public string?    CurrentComPort => _serialPort?.PortName;
+        public bool       IsConnected    => _serialPort?.IsOpen == true;
+        public DataValue  CurrentValue   => _currentDataValue;
 
         // ===================================================
-        // EVENTS
+        // EVENT
         // ===================================================
-
         private EventHandler<DataValueChangedEventArgs>? _dataValueChanged;
 
         /// <summary>
-        /// Sự kiện kích hoạt khi quét được thẻ RFID mới, hoặc trạng thái thay đổi.
-        /// <para>⚠️ Chạy trên ThreadPool thread — cần dispatch về UI thread khi cập nhật UI.</para>
+        /// Fired khi quét được thẻ hoặc trạng thái kết nối thay đổi.
+        /// ⚠️ Chạy trên ThreadPool — dispatch về UI thread khi cập nhật UI.
         /// </summary>
         public event EventHandler<DataValueChangedEventArgs> DataValueChanged
         {
-            add => _dataValueChanged += value;
+            add    => _dataValueChanged += value;
             remove => _dataValueChanged -= value;
         }
 
         // ===================================================
-        // CONSTRUCTOR — Private (Singleton)
+        // CONSTRUCTOR (private – Singleton)
         // ===================================================
         private RfidDriver() { }
 
         // ===================================================
-        // KHỞI TẠO VÀ KẾT NỐI
+        // INITIALIZE
         // ===================================================
 
-        /// <summary>
-        /// Khởi tạo và mở kết nối SerialPort cho RFID Reader.
-        /// </summary>
-        /// <param name="config">Cấu hình RFID. Null = dùng mặc định.</param>
-        /// <param name="isReconnect">true nếu đây là kết nối lại (không tăng NumSlave).</param>
-        /// <returns>true nếu mở cổng COM thành công.</returns>
+        /// <summary>Khởi tạo driver và mở cổng COM.</summary>
         public bool Initialize(RfidConfig? config = null, bool isReconnect = false)
         {
             _config = config ?? new RfidConfig();
 
-            // Kiểm tra enable
             if (!_config.Enable)
             {
                 LogInfo("RfidDriver bị vô hiệu hóa (Enable=false).");
                 return false;
             }
 
-            // Compile regex từ pattern trong config
             try
             {
                 _dataRegex = new Regex(_config.DataPattern, RegexOptions.Compiled);
             }
             catch (Exception ex)
             {
-                LogError(ex, "RfidDriver: Compile Regex thất bại");
-                _dataRegex = new Regex(@"\b0*(\d{5})\b", RegexOptions.Compiled); // Fallback pattern
+                LogError(ex, "Compile Regex thất bại");
+                _dataRegex = new Regex(@"\b0*(\d{5})\b", RegexOptions.Compiled);
             }
 
             return OpenSerialPort();
         }
 
-        /// <summary>
-        /// Mở cổng COM và bắt đầu nhận dữ liệu.
-        /// </summary>
+        // ===================================================
+        // OPEN PORT
+        // ===================================================
         private bool OpenSerialPort()
         {
             lock (_portLock)
             {
                 try
                 {
-                    // Nếu đã mở rồi thì không cần mở lại
                     if (_serialPort?.IsOpen == true)
                     {
                         LogInfo("SerialPort đã mở sẵn.");
                         return true;
                     }
 
-                    // Xác định cổng COM cần dùng
                     string? comPort;
-
                     if (_config!.AutoFindCom)
                     {
-                        // Tự động tìm cổng COM theo Caption và Manufacturer
                         comPort = AutoFindComPort(_config.DeviceCaption, _config.DeviceManufacturer);
                         if (string.IsNullOrEmpty(comPort))
                         {
@@ -203,19 +159,8 @@ namespace ScanAndScale.Core.Drivers
                         comPort = _config.ComPort;
                     }
 
-                    // Tạo và cấu hình SerialPort
-                    _serialPort = new SerialPort(
-                        comPort,
-                        _config.BaudRate,
-                        Parity.None,
-                        8,
-                        StopBits.One
-                    );
-
-                    // Đăng ký sự kiện nhận dữ liệu
+                    _serialPort = new SerialPort(comPort, _config.BaudRate, Parity.None, 8, StopBits.One);
                     _serialPort.DataReceived += SerialPort_DataReceived;
-
-                    // Mở cổng
                     _serialPort.Open();
 
                     LogInfo($"Kết nối RFID thành công tại {comPort} ({_config.BaudRate} baud).");
@@ -224,7 +169,7 @@ namespace ScanAndScale.Core.Drivers
                 }
                 catch (Exception ex)
                 {
-                    LogError(ex, "RfidDriver.OpenSerialPort");
+                    LogError(ex, "OpenSerialPort");
                     SetDataValue(new DataValue(DriverStatus.Disconnected, null));
                     return false;
                 }
@@ -232,31 +177,19 @@ namespace ScanAndScale.Core.Drivers
         }
 
         // ===================================================
-        // XỬ LÝ DỮ LIỆU NHẬN ĐƯỢC TỪ SERIAL PORT
+        // DATA RECEIVED
         // ===================================================
-
-        /// <summary>
-        /// Callback được gọi bởi SerialPort khi có dữ liệu đến.
-        /// ⚠️ Chạy trên ThreadPool thread!
-        /// </summary>
         private void SerialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
         {
             try
             {
-                // Bước 1: Đọc một dòng dữ liệu từ SerialPort
                 string rawData = _serialPort!.ReadLine();
+                LogInfo($"Dữ liệu thô: '{rawData}'");
 
-                LogInfo($"Dữ liệu RFID thô nhận được: '{rawData}'");
+                if (string.IsNullOrEmpty(rawData)) return;
 
-                if (string.IsNullOrEmpty(rawData))
-                    return;
-
-                // Bước 2: Parse dữ liệu bằng Regex để lấy mã số thẻ
-                //   Input mẫu: "0000008991\r" (có thể có ký tự control)
-                //   Output: "08991" (5 chữ số, loại bỏ leading zeros)
                 string rfidCode;
                 var match = _dataRegex!.Match(rawData);
-
                 if (match.Success)
                 {
                     rfidCode = match.Groups[1].Value;
@@ -264,137 +197,165 @@ namespace ScanAndScale.Core.Drivers
                 }
                 else
                 {
-                    // Không match pattern — báo cần quét lại
                     rfidCode = "Scan again";
                     LogInfo("Dữ liệu RFID không đúng định dạng.");
                 }
 
-                // Bước 3: Cập nhật giá trị và bắn sự kiện
                 SetDataValue(new DataValue(DriverStatus.Connected, rfidCode));
             }
             catch (TimeoutException)
             {
-                // Timeout đọc dữ liệu — bỏ qua, không phải lỗi nghiêm trọng
+                // ReadLine timeout — bỏ qua, không nghiêm trọng
                 LogInfo("SerialPort ReadLine timeout.");
             }
             catch (Exception ex)
             {
+                // Lỗi thực (port bị rút, ngắt điện, v.v.) → khởi động auto-reconnect
                 LogError(ex, "SerialPort_DataReceived");
                 SetDataValue(new DataValue(DriverStatus.Disconnected, null));
+                StartReconnectLoop();
             }
         }
 
         // ===================================================
-        // TỰ ĐỘNG TÌM CỔNG COM
+        // AUTO-FIND COM PORT
         // ===================================================
-
-        /// <summary>
-        /// Tự động tìm cổng COM của thiết bị RFID dựa vào tên và nhà sản xuất.
-        /// Duyệt tất cả thiết bị COM trong Device Manager qua WMI.
-        /// </summary>
-        /// <param name="caption">Caption (tên hiển thị) trong Device Manager, ví dụ: "Pongee".</param>
-        /// <param name="manufacturer">Tên nhà sản xuất, ví dụ: "Prolific".</param>
-        /// <returns>Tên cổng COM (ví dụ "COM3"), hoặc null nếu không tìm thấy.</returns>
         public static string? AutoFindComPort(string caption = "Pongee", string manufacturer = "Prolific")
         {
             try
             {
-                // Dùng WMI để duyệt tất cả thiết bị Plug-and-Play
                 using var entity = new ManagementClass("Win32_PnPEntity");
-
-                // ClassGuid của thiết bị COM port trong Windows
                 const string COM_PORT_GUID = "{4D36E978-E325-11CE-BFC1-08002BE10318}";
-                const string REG_ROOT = "HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\";
+                const string REG_ROOT      = "HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\";
 
                 foreach (ManagementObject instance in entity.GetInstances())
                 {
-                    // Bỏ qua thiết bị không phải COM port
                     var classGuid = instance.GetPropertyValue("ClassGuid")?.ToString()?.ToUpper();
                     if (classGuid != COM_PORT_GUID) continue;
 
-                    // Lấy thông tin thiết bị
-                    var deviceCaption = instance.GetPropertyValue("Caption")?.ToString() ?? "";
-                    var deviceMfg = instance.GetPropertyValue("Manufacturer")?.ToString() ?? "";
-                    var deviceId = instance.GetPropertyValue("PnpDeviceID")?.ToString() ?? "";
+                    var deviceCaption = instance.GetPropertyValue("Caption")?.ToString()       ?? "";
+                    var deviceMfg     = instance.GetPropertyValue("Manufacturer")?.ToString()  ?? "";
+                    var deviceId      = instance.GetPropertyValue("PnpDeviceID")?.ToString()   ?? "";
 
-                    // Lấy tên cổng COM từ registry
-                    var regPath = $"{REG_ROOT}Enum\\{deviceId}\\Device Parameters";
+                    var regPath  = $"{REG_ROOT}Enum\\{deviceId}\\Device Parameters";
                     var portName = Registry.GetValue(regPath, "PortName", "")?.ToString();
 
-                    // Bỏ phần "(COMx)" trong caption để so sánh thuần túy
                     var cleanCaption = deviceCaption;
                     var comIdx = cleanCaption.IndexOf(" (COM", StringComparison.Ordinal);
                     if (comIdx > 0) cleanCaption = cleanCaption.Substring(0, comIdx);
 
-                    LogInfo($"Tìm thấy COM device: {portName} | Caption: {cleanCaption} | Mfg: {deviceMfg}");
+                    LogInfo($"COM device: {portName} | {cleanCaption} | {deviceMfg}");
 
-                    // Kiểm tra khớp với tiêu chí tìm kiếm
                     if (cleanCaption == caption && deviceMfg == manufacturer)
-                    {
                         return portName;
-                    }
                 }
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[RfidDriver] AutoFindComPort lỗi: {ex.Message}");
             }
-
             return null;
         }
 
         // ===================================================
-        // KẾT NỐI LẠI (Reconnect)
+        // AUTO-RECONNECT LOOP
         // ===================================================
 
         /// <summary>
-        /// Thử kết nối lại với thiết bị RFID (đóng port cũ, mở port mới).
+        /// Khởi động vòng lặp tự động kết nối lại ở background thread.
+        /// Chỉ chạy một vòng lặp tại một thời điểm.
+        /// Mỗi lần thử cách nhau <see cref="ReconnectDelayMs"/> ms.
         /// </summary>
-        public void Reconnect()
+        private void StartReconnectLoop()
         {
-            LogInfo("Đang kết nối lại...");
-            ClosePort();
-            Thread.Sleep(500); // Chờ port sẵn sàng
-            Initialize(_config, isReconnect: true);
+            if (_isReconnecting) return;   // Đã có vòng lặp đang chạy
+            _isReconnecting = true;
+
+            _reconnectCts?.Cancel();
+            _reconnectCts = new CancellationTokenSource();
+            var token = _reconnectCts.Token;
+
+            Task.Run(async () =>
+            {
+                LogInfo($"[Reconnect] Bắt đầu auto-reconnect RFID (delay={ReconnectDelayMs}ms)...");
+                SetDataValue(new DataValue(DriverStatus.Reconnecting, null));
+
+                while (!token.IsCancellationRequested && !_disposed)
+                {
+                    try { await Task.Delay(ReconnectDelayMs, token); }
+                    catch (OperationCanceledException) { break; }
+
+                    if (token.IsCancellationRequested || _disposed) break;
+
+                    LogInfo("[Reconnect] Đang thử kết nối lại RFID...");
+                    ClosePort();
+
+                    bool ok = OpenSerialPort();
+                    if (ok)
+                    {
+                        // OpenSerialPort đã set Connected
+                        LogInfo("[Reconnect] Kết nối lại RFID thành công.");
+                        _isReconnecting = false;
+                        return;
+                    }
+
+                    // OpenSerialPort đã set Disconnected → reset về Reconnecting
+                    // để UI tiếp tục thể hiện đang cố gắng kết nối
+                    LogInfo($"[Reconnect] Thất bại. Thử lại sau {ReconnectDelayMs}ms...");
+                    SetDataValue(new DataValue(DriverStatus.Reconnecting, null));
+                }
+
+                _isReconnecting = false;
+                LogInfo("[Reconnect] Vòng lặp auto-reconnect RFID kết thúc.");
+            }, token);
         }
 
         // ===================================================
-        // ĐÓNG KẾT NỐI
+        // MANUAL RECONNECT
         // ===================================================
 
         /// <summary>
-        /// Đóng cổng COM và giải phóng SerialPort.
+        /// Kết nối lại thủ công (từ UI).
+        /// Hủy vòng lặp tự động hiện tại rồi khởi động lại.
         /// </summary>
+        public void Reconnect()
+        {
+            LogInfo("Manual reconnect được yêu cầu.");
+            _reconnectCts?.Cancel();
+            _isReconnecting = false;
+            ClosePort();
+            StartReconnectLoop();
+        }
+
+        // ===================================================
+        // CLOSE PORT
+        // ===================================================
         private void ClosePort()
         {
             lock (_portLock)
             {
-                if (_serialPort != null)
+                if (_serialPort == null) return;
+                try
                 {
-                    try
+                    if (_serialPort.IsOpen)
                     {
-                        if (_serialPort.IsOpen)
-                        {
-                            _serialPort.DataReceived -= SerialPort_DataReceived;
-                            _serialPort.Close();
-                        }
-                        _serialPort.Dispose();
-                        _serialPort = null;
-
-                        LogInfo("Đóng cổng COM thành công.");
+                        _serialPort.DataReceived -= SerialPort_DataReceived;
+                        _serialPort.Close();
                     }
-                    catch (Exception ex)
-                    {
-                        LogError(ex, "RfidDriver.ClosePort");
-                    }
+                    _serialPort.Dispose();
+                    _serialPort = null;
+                    LogInfo("Đóng cổng COM thành công.");
+                }
+                catch (Exception ex)
+                {
+                    LogError(ex, "ClosePort");
                 }
             }
         }
 
         // ===================================================
-        // CẬP NHẬT GIÁ TRỊ VÀ BẮN EVENT
+        // SET DATA VALUE
         // ===================================================
-
         private void SetDataValue(DataValue newValue)
         {
             var oldValue = _currentDataValue;
@@ -406,13 +367,16 @@ namespace ScanAndScale.Core.Drivers
         // DISPOSE
         // ===================================================
 
-        /// <summary>
-        /// Đóng SerialPort và giải phóng tài nguyên.
-        /// </summary>
+        /// <summary>Đóng port, hủy reconnect loop và giải phóng tài nguyên.</summary>
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
+
+            _reconnectCts?.Cancel();
+            _reconnectCts?.Dispose();
+            _reconnectCts   = null;
+            _isReconnecting = false;
 
             ClosePort();
             SetDataValue(new DataValue(DriverStatus.Disconnected, null));
@@ -420,7 +384,7 @@ namespace ScanAndScale.Core.Drivers
             LogInfo("RfidDriver đã được dispose.");
         }
 
-        private static void LogInfo(string msg) => Debug.WriteLine($"[RfidDriver] {msg}");
+        private static void LogInfo(string msg)             => Debug.WriteLine($"[RfidDriver] {msg}");
         private static void LogError(Exception ex, string ctx) => Helpers.DriverHelper.LogError(ex, ctx);
     }
 }
