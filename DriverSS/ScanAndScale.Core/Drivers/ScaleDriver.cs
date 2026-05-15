@@ -117,6 +117,9 @@ namespace ScanAndScale.Core.Drivers
         /// <summary>Đơn vị hiện tại của cân (KG, G, TON).</summary>
         public string Unit => _unit;
 
+        private bool _isReconnecting = false;
+        private CancellationTokenSource? _reconnectCts;
+
         // ===================================================
         // EVENTS
         // ===================================================
@@ -368,8 +371,72 @@ namespace ScanAndScale.Core.Drivers
             catch (Exception ex)
             {
                 LogError(ex, "ScaleDriver.ConnectAsync");
+
                 SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
+
+                _ = StartReconnectLoopAsync(); // 🔥 add
             }
+
+        }
+
+        /// <summary>
+        /// method ReconnectLoop.
+        /// </summary>
+        /// <returns></returns>
+        private async Task StartReconnectLoopAsync()
+        {
+            if (_isReconnecting) return;
+
+            _isReconnecting = true;
+            _reconnectCts = new CancellationTokenSource();
+            var token = _reconnectCts.Token;
+
+            LogInfo("Bắt đầu reconnect loop...");
+
+            while (!token.IsCancellationRequested && !_disposed)
+            {
+                try
+                {
+                    LogInfo("Thử reconnect...");
+
+                    // cleanup cũ trước
+                    CleanupSocket();
+
+                    _tcpClient = new TcpClient();
+
+                    var connectTask = _tcpClient.ConnectAsync(_config!.IP, _config.Port);
+                    var timeoutTask = Task.Delay(5000, token);
+
+                    if (await Task.WhenAny(connectTask, timeoutTask) == timeoutTask)
+                    {
+                        LogInfo("Reconnect timeout.");
+                    }
+                    else
+                    {
+                        await connectTask;
+
+                        _socket = _tcpClient.Client;
+
+                        LogInfo("Reconnect thành công!");
+
+                        SetDataValue(new DataValue(DriverStatus.Connected, _weightKg));
+
+                        StartReadTimer();
+
+                        _isReconnecting = false;
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogError(ex, "ReconnectLoop");
+                }
+
+                // delay trước khi retry
+                await Task.Delay(3000, token);
+            }
+
+            _isReconnecting = false;
         }
 
         // ===================================================
@@ -398,11 +465,16 @@ namespace ScanAndScale.Core.Drivers
             try
             {
                 // Kiểm tra trạng thái kết nối TCP
-                if (_tcpClient == null || !_tcpClient.Connected)
+
+                //if (_tcpClient == null || !_tcpClient.Connected)
+                if (_tcpClient == null || !IsSocketAlive())
                 {
                     SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
+
+                    _ = StartReconnectLoopAsync(); // 🔥 add dòng này
                     return;
                 }
+
 
                 // Đọc dữ liệu từ cân
                 await ReadScaleDataAsync();
@@ -460,10 +532,16 @@ namespace ScanAndScale.Core.Drivers
                 // Cập nhật giá trị và bắn sự kiện
                 SetDataValue(new DataValue(DriverStatus.Connected, _weightKg));
             }
+
             catch (Exception ex)
             {
                 LogError(ex, "ReadScaleDataAsync");
+
+                SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
+
+                _ = StartReconnectLoopAsync(); // 🔥 add
             }
+
         }
 
         /// <summary>
@@ -526,21 +604,50 @@ namespace ScanAndScale.Core.Drivers
         // NGẮT KẾT NỐI
         // ===================================================
 
-        /// <summary>Ngắt kết nối TCP và dừng timer đọc.</summary>
-        public void Disconnect()
+
+        private bool IsSocketAlive()
         {
             try
             {
-                _readTimer?.Stop();
-                _readTimer?.Dispose();
-                _readTimer = null;
+                return _socket != null &&
+                       !(_socket.Poll(1, SelectMode.SelectRead) && _socket.Available == 0);
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
+
+        /// <summary>
+        /// Helper cleanup.
+        /// </summary>
+        private void CleanupSocket()
+        {
+            try
+            {
                 _socket?.Close();
                 _socket = null;
 
                 _tcpClient?.Close();
                 _tcpClient?.Dispose();
                 _tcpClient = null;
+            }
+            catch { }
+        }
+
+        /// <summary>Ngắt kết nối TCP và dừng timer đọc.</summary>
+        public void Disconnect()
+        {
+            try
+            {
+                _reconnectCts?.Cancel();
+
+                _readTimer?.Stop();
+                _readTimer?.Dispose();
+                _readTimer = null;
+
+                CleanupSocket();
 
                 SetDataValue(new DataValue(DriverStatus.Disconnected, null));
                 LogInfo("ScaleDriver đã ngắt kết nối.");

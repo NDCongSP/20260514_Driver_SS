@@ -56,7 +56,7 @@ namespace Scale_Vibra_HAW30
                         string weightType = match.Groups[2].Value;    // NT hoặc GS. "GS" (Gross)
                         string weightWithSign = match.Groups[3].Value; // Trọng lượng
                         string unit = match.Groups[5].Value;                       // Đơn vị cố định
-                        
+
                         //Debug.WriteLine(weightWithSign);
 
                         //// Detect system's regional settings
@@ -96,28 +96,28 @@ namespace Scale_Vibra_HAW30
             {
 
             }
-}
+        }
 
 
-private static double ThisToDouble(object value)
-{
-    if (value == null || value == DBNull.Value)
-    {
-        return 0;
-    }
+        private static double ThisToDouble(object value)
+        {
+            if (value == null || value == DBNull.Value)
+            {
+                return 0;
+            }
 
-    if (value is double doubleValue)
-    {
-        return doubleValue;
-    }
+            if (value is double doubleValue)
+            {
+                return doubleValue;
+            }
 
 
-    if (double.TryParse(value.ToString(), NumberStyles.Any, new CultureInfo("en-US"), out double result))
-    {
-        return result;
-    }
+            if (double.TryParse(value.ToString(), NumberStyles.Any, new CultureInfo("en-US"), out double result))
+            {
+                return result;
+            }
 
-    return 0;
-}
+            return 0;
+        }
     }
 }
