@@ -10,6 +10,12 @@
     net8.0-windows  .NET 8  (WinForms / WPF)
 
   Khong phu thuoc WinForms, WPF, DevExpress.
+
+  EMBEDDED SCALE DLL:
+    Scale_*.dll duoc build roi copy vao thu muc scales\, sau do
+    nhung (embed) vao ben trong ScanAndScale.Core.dll.
+    Consumer project chi can them ScanAndScale.Core.dll la du —
+    khong can copy Scale_*.dll rieng le.
   ============================================================
   -->
 
@@ -29,7 +35,6 @@
   <PropertyGroup Condition="Exists('lib\Interop.CoreScanner.dll')">
     <DefineConstants>$(DefineConstants);ZEBRA_SCANNER</DefineConstants>
   </PropertyGroup>
-
   <ItemGroup Condition="Exists('lib\Interop.CoreScanner.dll')">
     <Reference Include="Interop.CoreScanner">
       <HintPath>lib\Interop.CoreScanner.dll</HintPath>
@@ -42,12 +47,12 @@
     <PackageReference Include="System.IO.Ports" Version="9.0.2" />
   </ItemGroup>
 
-  <!-- net6+ dung NuGet System.Management -->
+  <!-- net6+: dung NuGet System.Management -->
   <ItemGroup Condition="'$(TargetFramework)' != 'net472'">
     <PackageReference Include="System.Management" Version="9.0.1" />
   </ItemGroup>
 
-  <!-- net472: System.Management la GAC assembly, dung Reference thay vi NuGet -->
+  <!-- net472: System.Management la GAC assembly -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
     <Reference Include="System.Management" />
   </ItemGroup>
@@ -70,9 +75,9 @@
   SCALE PARSER PROJECTS
   ============================================================
   ReferenceOutputAssembly=false:
-    Build cac Scale project cung luc nhung KHONG link DLL vao
-    ScanAndScale.Core.dll luc compile. Scale DLL duoc ScaleDriver
-    load dong qua Reflection tai runtime.
+    Giu trong Solution Explorer va dependency graph cua VS/MSBuild
+    nhung KHONG link DLL vao ScanAndScale.Core.dll luc compile.
+    Scale DLL duoc ScaleDriver load dong qua embedded resource.
 
   SkipGetTargetFrameworkProperties=true:
     Cho phep multi-target (net472/net6/net8) reference
@@ -109,69 +114,67 @@
 
   <!--
   ============================================================
-  TARGET: IncludeScaleDllsForConsumers
+  TARGET: BuildAndCopyScaleDlls
   ============================================================
-  Khi project khac (WpfSample, WinFormsApp...) reference
-  ScanAndScale.Core, MSBuild goi GetCopyToOutputDirectoryItems
-  tren Core de biet co nhung file nao can copy sang consumer.
+  BUOC 1: Build that su tung Scale project (Targets="Build"),
+          sau do copy DLL output vao thu muc scales\ cua Core project.
 
-  Target nay:
-  1. Goi GetTargetPath tren tung Scale project de lay duong dan DLL chinh xac
-  2. Dang ky cac DLL do la None item voi CopyToOutputDirectory=PreserveNewest
-  3. GetCopyToOutputDirectoryItems thu thap cac item nay va tra ve cho consumer
+  Tai sao dung Targets="Build" thay vi Targets="GetTargetPath":
+    GetTargetPath chi tra ve DUONG DAN DU KIEN — khong dam bao DLL ton tai.
+    Neu Scale chua build, Exists(...) = false => khong embed gi ca.
+    Build dam bao DLL duoc bien dich xong TRUOC khi CoreCompile chay.
 
-  Ket qua: WpfSample (va bat ky consumer nao) tu dong co Scale_*.dll
-  trong output cua no MA KHONG can them cau hinh gi!
+  Thu muc scales\ la vung staging on dinh: EmbedScaleDlls doc tu day,
+  khong phu thuoc OutputPath hay TargetFramework cua Scale project.
   ============================================================
   -->
-  <Target Name="IncludeScaleDllsForConsumers"
-          BeforeTargets="GetCopyToOutputDirectoryItems">
+  <Target Name="BuildAndCopyScaleDlls" BeforeTargets="EmbedScaleDlls">
 
-    <!-- Lay duong dan DLL chinh xac tu tung Scale project -->
+    <!-- Build Scale_DIGI -->
     <MSBuild Projects="..\Scale_DIGI\Scale_DIGI.csproj"
-             Targets="GetTargetPath"
+             Targets="Build"
              Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsForPropagation"/>
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsBuilt"/>
     </MSBuild>
 
+    <!-- Build Scale_IND_KG -->
     <MSBuild Projects="..\Scale_IND_KG\Scale_IND_KG.csproj"
-             Targets="GetTargetPath"
+             Targets="Build"
              Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsForPropagation"/>
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsBuilt"/>
     </MSBuild>
 
+    <!-- Build Scale_SampleReading -->
     <MSBuild Projects="..\Scale_SampleReading\Scale_SampleReading.csproj"
-             Targets="GetTargetPath"
+             Targets="Build"
              Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsForPropagation"/>
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsBuilt"/>
     </MSBuild>
 
+    <!-- Build Scale_Vibra_HAW30 -->
     <MSBuild Projects="..\Scale_Vibra_HAW30\Scale_Vibra_HAW30.csproj"
-             Targets="GetTargetPath"
+             Targets="Build"
              Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsForPropagation"/>
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsBuilt"/>
     </MSBuild>
 
+    <!-- Build Scale_Vibra_SJ6200 -->
     <MSBuild Projects="..\Scale_Vibra_SJ6200\Scale_Vibra_SJ6200.csproj"
-             Targets="GetTargetPath"
+             Targets="Build"
              Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsForPropagation"/>
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsBuilt"/>
     </MSBuild>
 
-    <!--
-    Dang ky cac DLL nhu None item voi CopyToOutputDirectory.
-    MSBuild se tu dong copy chung vao output cua bat ky project
-    nao reference ScanAndScale.Core.
-    Link: dat ten file trong output (khong co duong dan tuyet doi)
-    -->
-    <ItemGroup>
-      <None Include="@(_ScaleDllsForPropagation)"
-            Condition="Exists('%(Identity)')">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Visible>false</Visible>
-        <Link>%(Filename)%(Extension)</Link>
-      </None>
-    </ItemGroup>
+    <!-- Dam bao thu muc scales\ ton tai -->
+    <MakeDir Directories="$(MSBuildProjectDirectory)\scales"/>
+
+    <!-- Copy DLL vao scales\ -->
+    <Copy SourceFiles="@(_ScaleDllsBuilt)"
+          DestinationFolder="$(MSBuildProjectDirectory)\scales\"
+          SkipUnchangedFiles="true"/>
+
+    <Message Importance="high"
+             Text="[ScanAndScale.Core] Da copy Scale DLL vao scales\: @(_ScaleDllsBuilt -> '%(Filename)%(Extension)', ', ')"/>
 
   </Target>
 
@@ -180,66 +183,65 @@
   ============================================================
   TARGET: EmbedScaleDlls
   ============================================================
-  Nhung Scale_*.dll vao ben trong ScanAndScale.Core.dll nhu
-  EmbeddedResource TRUOC khi CoreCompile chay.
+  BUOC 2: Nhung tat ca DLL tu scales\ vao ScanAndScale.Core.dll
+          nhu EmbeddedResource TRUOC khi CoreCompile chay.
 
-  Loi ich:
-  - Nguoi dung chi can them ScanAndScale.Core.dll la dung duoc ngay
-  - Khong can copy Scale_*.dll thu cong vao thu muc .exe
-  - ScaleDriver se load DLL tu embedded resource (Assembly.Load(byte[]))
-    roi moi fallback sang file neu can
+  DependsOnTargets="BuildAndCopyScaleDlls":
+    Dam bao BUOC 1 chay xong (DLL da co trong scales\) truoc khi glob.
 
-  LogicalName = "Scale_DIGI.dll" (khong co namespace prefix)
-  de GetManifestResourceStream("Scale_DIGI.dll") hoat dong chinh xac.
+  LogicalName = "Scale_DIGI.dll" (ten file don gian, khong co namespace):
+    ScaleDriver goi GetManifestResourceStream("Scale_DIGI.dll") chinh xac.
+
+  Ket qua: bat ky consumer nao chi can ScanAndScale.Core.dll la du —
+           khong can them file Scale_*.dll nao ben ngoai.
   ============================================================
   -->
-  <Target Name="EmbedScaleDlls" BeforeTargets="CoreCompile">
+  <Target Name="EmbedScaleDlls"
+          BeforeTargets="CoreCompile"
+          DependsOnTargets="BuildAndCopyScaleDlls">
 
-    <MSBuild Projects="..\Scale_DIGI\Scale_DIGI.csproj"
-             Targets="GetTargetPath"
-             Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsToEmbed"/>
-    </MSBuild>
-
-    <MSBuild Projects="..\Scale_IND_KG\Scale_IND_KG.csproj"
-             Targets="GetTargetPath"
-             Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsToEmbed"/>
-    </MSBuild>
-
-    <MSBuild Projects="..\Scale_SampleReading\Scale_SampleReading.csproj"
-             Targets="GetTargetPath"
-             Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsToEmbed"/>
-    </MSBuild>
-
-    <MSBuild Projects="..\Scale_Vibra_HAW30\Scale_Vibra_HAW30.csproj"
-             Targets="GetTargetPath"
-             Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsToEmbed"/>
-    </MSBuild>
-
-    <MSBuild Projects="..\Scale_Vibra_SJ6200\Scale_Vibra_SJ6200.csproj"
-             Targets="GetTargetPath"
-             Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsToEmbed"/>
-    </MSBuild>
-
-    <!--
-    Dang ky EmbeddedResource — LogicalName la ten file don gian ("Scale_DIGI.dll")
-    de ScaleDriver co the goi GetManifestResourceStream("Scale_DIGI.dll")
-    -->
     <ItemGroup>
-      <EmbeddedResource Include="@(_ScaleDllsToEmbed)"
-                        Condition="Exists('%(Identity)')">
+      <EmbeddedResource Include="$(MSBuildProjectDirectory)\scales\*.dll">
         <LogicalName>%(Filename)%(Extension)</LogicalName>
         <WithCulture>false</WithCulture>
       </EmbeddedResource>
     </ItemGroup>
 
     <Message Importance="high"
-             Text="[ScanAndScale.Core] Da nhung EmbeddedResource: %(Filename)%(Extension)"
-             Condition="'@(_ScaleDllsToEmbed)' != ''"/>
+             Text="[ScanAndScale.Core] Dang nhung EmbeddedResource tu scales\..."/>
+
+  </Target>
+
+
+  <!--
+  ============================================================
+  TARGET: IncludeScaleDllsForConsumers
+  ============================================================
+  TUY CHON: Khi project khac reference ScanAndScale.Core qua ProjectReference,
+  target nay cung copy Scale DLL tu scales\ sang output cua consumer.
+
+  Scale DLL da embedded nen consumer chi can Core.dll de chay.
+  Target nay giup Scale_*.dll xuat hien ben canh .exe de:
+    - Debug / kiem tra phien ban DLL
+    - Override DLL bang phien ban moi hon (ScaleDriver uu tien file truoc embedded)
+
+  Neu khong muon copy, co the xoa Target nay.
+  ============================================================
+  -->
+  <Target Name="IncludeScaleDllsForConsumers"
+          BeforeTargets="GetCopyToOutputDirectoryItems">
+
+    <ItemGroup>
+      <_ScaleDllsInScalesFolder Include="$(MSBuildProjectDirectory)\scales\*.dll"/>
+    </ItemGroup>
+
+    <ItemGroup Condition="'@(_ScaleDllsInScalesFolder)' != ''">
+      <None Include="@(_ScaleDllsInScalesFolder)">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Visible>false</Visible>
+        <Link>%(Filename)%(Extension)</Link>
+      </None>
+    </ItemGroup>
 
   </Target>
 

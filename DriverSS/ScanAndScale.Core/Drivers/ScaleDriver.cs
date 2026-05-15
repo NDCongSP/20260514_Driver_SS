@@ -204,6 +204,14 @@ namespace ScanAndScale.Core.Drivers
                 }
                 else
                 {
+                    // Diagnostic: liệt kê resource thực sự có trong Core.dll
+                    // Nếu danh sách rỗng → EmbedScaleDlls target chưa nhúng được DLL.
+                    var available = typeof(ScaleDriver).Assembly.GetManifestResourceNames();
+                    if (available.Length == 0)
+                        LogInfo($"[WARN] Không có embedded resource nào trong Core.dll — EmbedScaleDlls target có thể chưa chạy đúng. Cần Rebuild Solution.");
+                    else
+                        LogInfo($"[WARN] Không tìm thấy '{dllFileName}'. Resources trong Core.dll: {string.Join(", ", available)}");
+
                     // ── Ưu tiên 2: Load từ file trên disk (fallback) ─────────────────
                     // Dùng khi Scale DLL không được nhúng (build cũ, hoặc deploy thủ công).
                     string dllFullPath = FindDllPath(dllFileName);
@@ -487,103 +495,4 @@ namespace ScanAndScale.Core.Drivers
                 var rawWeight = (double?)parameters[0] ?? 0.0;
                 _isStable = (bool?)parameters[1] ?? false;
                 _isTare = (bool?)parameters[2] ?? false;
-                _unit = (string?)parameters[3] ?? "KG";
-
-                // Áp dụng hiệu chỉnh: (rawWeight + CalibZero) * CalibGain
-                if (rawWeight != 0)
-                {
-                    _weightKg = Math.Round(
-                        (rawWeight + _config!.CalibZero) * _config.CalibGain,
-                        _config.DecimalNum
-                    );
-                }
-                else
-                {
-                    _weightKg = 0;
-                }
-            }
-            catch (Exception ex)
-            {
-                LogError(ex, "ParseScaleData");
-            }
-        }
-
-        // ===================================================
-        // HÀM NỘI BỘ
-        // ===================================================
-
-        private void SetDataValue(DataValue newValue)
-        {
-            var oldValue = _currentDataValue;
-            _currentDataValue = newValue;
-            _dataValueChanged?.Invoke(this, new DataValueChangedEventArgs(oldValue, newValue));
-        }
-
-        // ===================================================
-        // KẾT NỐI LẠI
-        // ===================================================
-
-        /// <summary>
-        /// Ngắt kết nối TCP hiện tại và thử kết nối lại.
-        /// </summary>
-        public async Task ReconnectAsync()
-        {
-            LogInfo("Đang kết nối lại cân...");
-            DisconnectTcp();
-            await Task.Delay(1000); // Chờ 1 giây
-            await ConnectAsync();
-        }
-
-        // ===================================================
-        // NGẮT KẾT NỐI TCP
-        // ===================================================
-
-        private void DisconnectTcp()
-        {
-            try
-            {
-                _socket?.Close();
-                _socket = null;
-
-                _tcpClient?.Close();
-                _tcpClient?.Dispose();
-                _tcpClient = null;
-            }
-            catch (Exception ex)
-            {
-                LogError(ex, "DisconnectTcp");
-            }
-        }
-
-        // ===================================================
-        // DISPOSE
-        // ===================================================
-
-        /// <summary>
-        /// Dừng timer, ngắt kết nối TCP, giải phóng tài nguyên.
-        /// Gọi khi thoát ứng dụng hoặc đóng màn hình.
-        /// </summary>
-        public void Dispose()
-        {
-            if (_disposed) return;
-            _disposed = true;
-
-            // Dừng timer trước
-            if (_readTimer != null)
-            {
-                _readTimer.Stop();
-                _readTimer.Dispose();
-                _readTimer = null;
-            }
-
-            // Ngắt kết nối TCP
-            DisconnectTcp();
-
-            SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
-            LogInfo("ScaleDriver đã được dispose.");
-        }
-
-        private static void LogInfo(string msg) => Debug.WriteLine($"[ScaleDriver] {msg}");
-        private static void LogError(Exception ex, string ctx) => Helpers.DriverHelper.LogError(ex, ctx);
-    }
-}
+                _unit = (string?)p
