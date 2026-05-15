@@ -495,4 +495,82 @@ namespace ScanAndScale.Core.Drivers
                 var rawWeight = (double?)parameters[0] ?? 0.0;
                 _isStable = (bool?)parameters[1] ?? false;
                 _isTare = (bool?)parameters[2] ?? false;
-                _unit = (string?)p
+                _unit = (string?)parameters[3] ?? "KG";
+                _weightKg = rawWeight;
+            }
+            catch (Exception ex)
+            {
+                LogError(ex, "ScaleDriver.ParseScaleData");
+            }
+        }
+
+        // ===================================================
+        // CẬP NHẬT GIÁ TRỊ & BẮN SỰ KIỆN
+        // ===================================================
+
+        /// <summary>
+        /// Cập nhật <see cref="_currentDataValue"/> và bắn sự kiện <see cref="DataValueChanged"/>
+        /// nếu giá trị hoặc trạng thái thực sự thay đổi.
+        /// </summary>
+        private void SetDataValue(DataValue newValue)
+        {
+            if (_currentDataValue.Equals(newValue))
+                return;
+
+            _currentDataValue = newValue;
+            _dataValueChanged?.Invoke(this, new DataValueChangedEventArgs(newValue));
+        }
+
+        // ===================================================
+        // NGẮT KẾT NỐI
+        // ===================================================
+
+        /// <summary>Ngắt kết nối TCP và dừng timer đọc.</summary>
+        public void Disconnect()
+        {
+            try
+            {
+                _readTimer?.Stop();
+                _readTimer?.Dispose();
+                _readTimer = null;
+
+                _socket?.Close();
+                _socket = null;
+
+                _tcpClient?.Close();
+                _tcpClient?.Dispose();
+                _tcpClient = null;
+
+                SetDataValue(new DataValue(DriverStatus.Disconnected, null));
+                LogInfo("ScaleDriver đã ngắt kết nối.");
+            }
+            catch (Exception ex)
+            {
+                LogError(ex, "ScaleDriver.Disconnect");
+            }
+        }
+
+        // ===================================================
+        // DISPOSE
+        // ===================================================
+
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            Disconnect();
+            GC.SuppressFinalize(this);
+        }
+
+        // ===================================================
+        // HELPERS — LOG
+        // ===================================================
+
+        private static void LogInfo(string msg) =>
+            Debug.WriteLine($"[ScaleDriver] {msg}");
+
+        private static void LogError(Exception ex, string context) =>
+            Debug.WriteLine($"[ScaleDriver][ERROR] {context}: {ex.Message}");
+    }
+}
