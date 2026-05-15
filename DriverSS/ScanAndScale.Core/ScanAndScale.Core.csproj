@@ -133,35 +133,35 @@
     <!-- Build Scale_DIGI -->
     <MSBuild Projects="..\Scale_DIGI\Scale_DIGI.csproj"
              Targets="Build"
-             Properties="Configuration=$(Configuration)">
+             Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0">
       <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsBuilt"/>
     </MSBuild>
 
     <!-- Build Scale_IND_KG -->
     <MSBuild Projects="..\Scale_IND_KG\Scale_IND_KG.csproj"
              Targets="Build"
-             Properties="Configuration=$(Configuration)">
+             Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0">
       <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsBuilt"/>
     </MSBuild>
 
     <!-- Build Scale_SampleReading -->
     <MSBuild Projects="..\Scale_SampleReading\Scale_SampleReading.csproj"
              Targets="Build"
-             Properties="Configuration=$(Configuration)">
+             Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0">
       <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsBuilt"/>
     </MSBuild>
 
     <!-- Build Scale_Vibra_HAW30 -->
     <MSBuild Projects="..\Scale_Vibra_HAW30\Scale_Vibra_HAW30.csproj"
              Targets="Build"
-             Properties="Configuration=$(Configuration)">
+             Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0">
       <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsBuilt"/>
     </MSBuild>
 
     <!-- Build Scale_Vibra_SJ6200 -->
     <MSBuild Projects="..\Scale_Vibra_SJ6200\Scale_Vibra_SJ6200.csproj"
              Targets="Build"
-             Properties="Configuration=$(Configuration)">
+             Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0">
       <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsBuilt"/>
     </MSBuild>
 
