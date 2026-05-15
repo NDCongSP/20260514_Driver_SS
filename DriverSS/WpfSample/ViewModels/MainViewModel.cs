@@ -289,7 +289,7 @@ namespace WpfSample.ViewModels
             // Dùng ScaleModelNames thay cho string thô → tránh typo, IntelliSense hỗ trợ
             // Các lựa chọn: ScaleModelNames.DIGI, IND_KG, Vibra_SJ6200, Vibra_HAW30, SampleReading
             // Scale_DIGI.dll đã được nhúng vào ScanAndScale.Core.dll — không cần file bên ngoài
-            ModelName = ScaleModelNames.DIGI,
+            ModelName = ScaleModelNames.Vibra_HAW30,
             TimeScanMs = 400,          // Đọc mỗi 400ms
             CalibZero = 0.0,           // Hiệu chỉnh offset
             CalibGain = 1.0,           // Hệ số nhân
