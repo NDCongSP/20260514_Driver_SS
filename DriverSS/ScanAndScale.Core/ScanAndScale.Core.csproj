@@ -197,18 +197,25 @@
   ============================================================
   -->
   <Target Name="EmbedScaleDlls"
-          BeforeTargets="CoreCompile"
+          BeforeTargets="BeforeBuild"
           DependsOnTargets="BuildAndCopyScaleDlls">
 
     <ItemGroup>
-      <EmbeddedResource Include="$(MSBuildProjectDirectory)\scales\*.dll">
+      <_ScaleFilesToEmbed Include="$(MSBuildProjectDirectory)\scales\*.dll"/>
+    </ItemGroup>
+
+    <Message Importance="high"
+             Text="[EmbedScaleDlls] Found DLLs to embed: @(_ScaleFilesToEmbed -> '%(Filename)%(Extension)', ', ')"/>
+
+    <ItemGroup>
+      <EmbeddedResource Include="@(_ScaleFilesToEmbed)">
         <LogicalName>%(Filename)%(Extension)</LogicalName>
         <WithCulture>false</WithCulture>
       </EmbeddedResource>
     </ItemGroup>
 
     <Message Importance="high"
-             Text="[ScanAndScale.Core] Dang nhung EmbeddedResource tu scales\..."/>
+             Text="[EmbedScaleDlls] EmbeddedResource count: @(EmbeddedResource->Count())"/>
 
   </Target>
 
