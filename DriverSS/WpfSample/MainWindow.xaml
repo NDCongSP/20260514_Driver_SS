@@ -1,201 +1,239 @@
 <!--
-============================================================
-MainWindow.xaml — Giao diện chính của WPF Sample
-============================================================
-Giao diện chia 3 nhóm chính: Barcode | RFID | Scale
-Mỗi nhóm hiển thị:
-  • Đèn trạng thái kết nối (màu)
-  • Giá trị đọc được
-  • Log hoạt động
-
-Tất cả dữ liệu bind từ MainViewModel qua DataContext.
-============================================================
+    ============================================================
+    MainWindow.xaml — Giao diện chính của WPF Sample
+    ============================================================
+    Giao diện chia 3 nhóm chính: Barcode | RFID | Scale
+    Mỗi nhóm hiển thị:
+    • Đèn trạng thái kết nối (màu)
+    • Giá trị đọc được
+    • Log hoạt động
+    
+    Tất cả dữ liệu bind từ MainViewModel qua DataContext.
+    ============================================================
 -->
-<Window x:Class="WpfSample.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:vm="clr-namespace:WpfSample.ViewModels"
-        xmlns:conv="clr-namespace:WpfSample.Converters"
-        mc:Ignorable="d"
-        Title="ScanAndScale.Core — WPF Sample (Barcode | RFID | Scale)"
-        Width="1100" Height="780"
-        MinWidth="900" MinHeight="600"
-        WindowStartupLocation="CenterScreen"
-        Loaded="MainWindow_Loaded"
-        Closed="MainWindow_Closed">
+<Window
+    x:Class="WpfSample.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:conv="clr-namespace:WpfSample.Converters"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="clr-namespace:WpfSample.ViewModels"
+    Title="ScanAndScale.Core — WPF Sample (Barcode | RFID | Scale)"
+    Width="1100"
+    Height="780"
+    MinWidth="900"
+    MinHeight="600"
+    Closed="MainWindow_Closed"
+    Loaded="MainWindow_Loaded"
+    WindowStartupLocation="CenterScreen"
+    mc:Ignorable="d">
 
-    <!-- =========================================================
-    RESOURCES — Khai báo Converters và Styles
-    ========================================================= -->
+    <!--
+        =========================================================
+        RESOURCES — Khai báo Converters và Styles
+        =========================================================
+    -->
     <Window.Resources>
-        <!-- Converters dùng trong binding -->
-        <conv:DriverStatusToColorConverter x:Key="StatusToColor"/>
-        <conv:StableToForegroundConverter x:Key="StableToFg"/>
-        <conv:TareToBackgroundConverter x:Key="TareToBg"/>
-        <conv:InverseBoolToVisibilityConverter x:Key="InvBoolToVis"/>
+        <!--  Converters dùng trong binding  -->
+        <conv:DriverStatusToColorConverter x:Key="StatusToColor" />
+        <conv:StableToForegroundConverter x:Key="StableToFg" />
+        <conv:TareToBackgroundConverter x:Key="TareToBg" />
+        <conv:InverseBoolToVisibilityConverter x:Key="InvBoolToVis" />
 
-        <!-- Style chung cho GroupBox tiêu đề -->
+        <!--  Style chung cho GroupBox tiêu đề  -->
         <Style x:Key="DeviceGroupBox" TargetType="GroupBox">
-            <Setter Property="Margin" Value="6"/>
-            <Setter Property="Padding" Value="8"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="BorderBrush" Value="#CCCCCC"/>
+            <Setter Property="Margin" Value="6" />
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="BorderBrush" Value="#CCCCCC" />
         </Style>
 
-        <!-- Style cho nhãn mô tả -->
+        <!--  Style cho nhãn mô tả  -->
         <Style x:Key="LabelStyle" TargetType="TextBlock">
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="4,2"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="#444"/>
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="4,2" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="#444" />
         </Style>
 
-        <!-- Style cho TextBox hiển thị giá trị chính -->
+        <!--  Style cho TextBox hiển thị giá trị chính  -->
         <Style x:Key="ValueBox" TargetType="TextBox">
-            <Setter Property="FontSize" Value="20"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Padding" Value="8,6"/>
-            <Setter Property="IsReadOnly" Value="True"/>
-            <Setter Property="BorderBrush" Value="#AAAAAA"/>
-            <Setter Property="Margin" Value="4,2"/>
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="BorderBrush" Value="#AAAAAA" />
+            <Setter Property="Margin" Value="4,2" />
         </Style>
 
-        <!-- Style cho TextBox log (nhỏ hơn) -->
+        <!--  Style cho TextBox log (nhỏ hơn)  -->
         <Style x:Key="LogBox" TargetType="TextBox">
-            <Setter Property="FontFamily" Value="Consolas"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="IsReadOnly" Value="True"/>
-            <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
-            <Setter Property="Background" Value="#1E1E1E"/>
-            <Setter Property="Foreground" Value="#DCDCAA"/>
-            <Setter Property="Padding" Value="4"/>
-            <Setter Property="Margin" Value="4,2"/>
-            <Setter Property="BorderBrush" Value="#555"/>
+            <Setter Property="FontFamily" Value="Consolas" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="Background" Value="#1E1E1E" />
+            <Setter Property="Foreground" Value="#DCDCAA" />
+            <Setter Property="Padding" Value="4" />
+            <Setter Property="Margin" Value="4,2" />
+            <Setter Property="BorderBrush" Value="#555" />
         </Style>
 
-        <!-- Style cho Button -->
+        <!--  Style cho Button  -->
         <Style x:Key="ActionButton" TargetType="Button">
-            <Setter Property="Padding" Value="12,6"/>
-            <Setter Property="Margin" Value="4"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="MinWidth" Value="120"/>
-            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="12,6" />
+            <Setter Property="Margin" Value="4" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="MinWidth" Value="120" />
+            <Setter Property="Cursor" Value="Hand" />
         </Style>
     </Window.Resources>
 
-    <!-- =========================================================
-    MAIN LAYOUT
-    ========================================================= -->
+    <!--
+        =========================================================
+        MAIN LAYOUT
+        =========================================================
+    -->
     <DockPanel>
 
-        <!-- ===== THANH TOOLBAR TRÊN ===== -->
-        <ToolBar DockPanel.Dock="Top" Height="48" Background="#F0F0F0">
+        <!--  ===== THANH TOOLBAR TRÊN =====  -->
+        <ToolBar
+            Height="48"
+            Background="#F0F0F0"
+            DockPanel.Dock="Top">
 
-            <!-- Nút kết nối tất cả — chỉ enable khi chưa kết nối -->
-            <Button Style="{StaticResource ActionButton}"
-                    Command="{Binding ConnectAllCommand}"
-                    Background="#28A745" Foreground="White"
-                    FontWeight="Bold">
+            <!--  Nút kết nối tất cả — chỉ enable khi chưa kết nối  -->
+            <Button
+                Background="#28A745"
+                Command="{Binding ConnectAllCommand}"
+                FontWeight="Bold"
+                Foreground="White"
+                Style="{StaticResource ActionButton}">
                 ▶ Kết nối tất cả
             </Button>
 
-            <Separator/>
+            <Separator />
 
-            <!-- Nút ngắt kết nối — chỉ enable khi đã kết nối -->
-            <Button Style="{StaticResource ActionButton}"
-                    Command="{Binding DisconnectAllCommand}"
-                    Background="#DC3545" Foreground="White">
+            <!--  Nút ngắt kết nối — chỉ enable khi đã kết nối  -->
+            <Button
+                Background="#DC3545"
+                Command="{Binding DisconnectAllCommand}"
+                Foreground="White"
+                Style="{StaticResource ActionButton}">
                 ■ Ngắt kết nối
             </Button>
 
-            <Separator/>
+            <Separator />
 
-            <!-- Nút kết nối lại RFID riêng lẻ -->
-            <Button Style="{StaticResource ActionButton}"
-                    Command="{Binding ReconnectRfidCommand}"
-                    Background="#007BFF" Foreground="White">
+            <!--  Nút kết nối lại RFID riêng lẻ  -->
+            <Button
+                Background="#007BFF"
+                Command="{Binding ReconnectRfidCommand}"
+                Foreground="White"
+                Style="{StaticResource ActionButton}">
                 ↺ Kết nối lại RFID
             </Button>
 
-            <Separator/>
+            <Separator />
 
-            <!-- Nút xóa log -->
-            <Button Style="{StaticResource ActionButton}"
-                    Command="{Binding ClearLogCommand}">
+            <!--  Nút xóa log  -->
+            <Button Command="{Binding ClearLogCommand}" Style="{StaticResource ActionButton}">
                 🗑 Xóa log
             </Button>
 
         </ToolBar>
 
-        <!-- ===== THANH TRẠNG THÁI DƯỚI ===== -->
-        <StatusBar DockPanel.Dock="Bottom" Background="#E9ECEF" Height="28">
+        <!--  ===== THANH TRẠNG THÁI DƯỚI =====  -->
+        <StatusBar
+            Height="28"
+            Background="#E9ECEF"
+            DockPanel.Dock="Bottom">
             <StatusBarItem>
-                <TextBlock Text="{Binding StatusMessage}"
-                           FontSize="12"
-                           Foreground="#495057"/>
+                <TextBlock
+                    FontSize="12"
+                    Foreground="#495057"
+                    Text="{Binding StatusMessage}" />
             </StatusBarItem>
         </StatusBar>
 
-        <!-- ===== CONTENT CHÍNH ===== -->
+        <!--  ===== CONTENT CHÍNH =====  -->
         <Grid Margin="4">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>  <!-- Hàng 1: 3 nhóm thiết bị -->
-                <RowDefinition Height="*"/>      <!-- Hàng 2: Logs -->
+                <RowDefinition Height="Auto" />  
+                <!--  Hàng 1: 3 nhóm thiết bị  -->
+                <RowDefinition Height="*" />      
+                <!--  Hàng 2: Logs  -->
             </Grid.RowDefinitions>
 
-            <!-- ===================================================
-            HÀNG 1: 3 GroupBox thiết bị (Barcode | RFID | Scale)
-            =================================================== -->
+            <!--
+                ===================================================
+                HÀNG 1: 3 GroupBox thiết bị (Barcode | RFID | Scale)
+                ===================================================
+            -->
             <Grid Grid.Row="0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <!-- ===============================================
-                NHÓM 1: BARCODE (Zebra Scanner SDK)
-                =============================================== -->
-                <GroupBox Grid.Column="0"
-                          Header="🔲 Barcode (Zebra Scanner SDK)"
-                          Style="{StaticResource DeviceGroupBox}">
+                <!--
+                    ===============================================
+                    NHÓM 1: BARCODE (Zebra Scanner SDK)
+                    ===============================================
+                -->
+                <GroupBox
+                    Grid.Column="0"
+                    Header="🔲 Barcode (Zebra Scanner SDK)"
+                    Style="{StaticResource DeviceGroupBox}">
                     <StackPanel>
 
-                        <!-- Đèn trạng thái kết nối -->
-                        <StackPanel Orientation="Horizontal" Margin="0,4">
-                            <Ellipse Width="16" Height="16"
-                                     Margin="0,0,8,0"
-                                     Fill="{Binding BarcodeStatus, Converter={StaticResource StatusToColor}}"/>
-                            <TextBlock Text="{Binding BarcodeStatusText}"
-                                       Style="{StaticResource LabelStyle}"
-                                       FontWeight="Bold"/>
+                        <!--  Đèn trạng thái kết nối  -->
+                        <StackPanel Margin="0,4" Orientation="Horizontal">
+                            <Ellipse
+                                Width="16"
+                                Height="16"
+                                Margin="0,0,8,0"
+                                Fill="{Binding BarcodeStatus, Converter={StaticResource StatusToColor}}" />
+                            <TextBlock
+                                FontWeight="Bold"
+                                Style="{StaticResource LabelStyle}"
+                                Text="{Binding BarcodeStatusText}" />
                         </StackPanel>
 
-                        <!-- Label -->
-                        <TextBlock Text="Giá trị Barcode:" Style="{StaticResource LabelStyle}"/>
+                        <!--  Label  -->
+                        <TextBlock Style="{StaticResource LabelStyle}" Text="Giá trị Barcode:" />
 
                         <!--
-                        TextBox hiển thị barcode vừa quét.
-                        Binding: BarcodeValue — cập nhật tự động qua INotifyPropertyChanged.
+                            TextBox hiển thị barcode vừa quét.
+                            Binding: BarcodeValue — cập nhật tự động qua INotifyPropertyChanged.
                         -->
-                        <TextBox Style="{StaticResource ValueBox}"
-                                 Text="{Binding BarcodeValue, Mode=OneWay}"
-                                 Foreground="DarkBlue"/>
+                        <TextBox
+                            Foreground="DarkBlue"
+                            Style="{StaticResource ValueBox}"
+                            Text="{Binding BarcodeValue, Mode=OneWay}" />
 
-                        <!-- Hướng dẫn -->
-                        <TextBlock Text="Quét barcode bằng máy quét Zebra để thấy kết quả."
-                                   Style="{StaticResource LabelStyle}"
-                                   FontStyle="Italic"
-                                   Foreground="#888"
-                                   TextWrapping="Wrap"
-                                   Margin="4,6,4,2"/>
+                        <!--  Hướng dẫn  -->
+                        <TextBlock
+                            Margin="4,6,4,2"
+                            FontStyle="Italic"
+                            Foreground="#888"
+                            Style="{StaticResource LabelStyle}"
+                            Text="Quét barcode bằng máy quét Zebra để thấy kết quả."
+                            TextWrapping="Wrap" />
 
-                        <!-- Cảnh báo nếu không có Zebra SDK -->
-                        <Border Background="#FFF3CD" BorderBrush="#FFC107"
-                                BorderThickness="1" Padding="6" Margin="4,4">
-                            <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="#856404">
+                        <!--  Cảnh báo nếu không có Zebra SDK  -->
+                        <Border
+                            Margin="4,4"
+                            Padding="6"
+                            Background="#FFF3CD"
+                            BorderBrush="#FFC107"
+                            BorderThickness="1">
+                            <TextBlock
+                                FontSize="11"
+                                Foreground="#856404"
+                                TextWrapping="Wrap">
                                 ⚠️ Yêu cầu: Copy Interop.CoreScanner.dll vào thư mục lib\ của ScanAndScale.Core.
                                 Zebra Scanner SDK phải được cài đặt trên máy.
                             </TextBlock>
@@ -204,116 +242,146 @@ Tất cả dữ liệu bind từ MainViewModel qua DataContext.
                     </StackPanel>
                 </GroupBox>
 
-                <!-- ===============================================
-                NHÓM 2: RFID (SerialPort)
-                =============================================== -->
-                <GroupBox Grid.Column="1"
-                          Header="📡 RFID (SerialPort / COM)"
-                          Style="{StaticResource DeviceGroupBox}">
+                <!--
+                    ===============================================
+                    NHÓM 2: RFID (SerialPort)
+                    ===============================================
+                -->
+                <GroupBox
+                    Grid.Column="1"
+                    Header="📡 RFID (SerialPort / COM)"
+                    Style="{StaticResource DeviceGroupBox}">
                     <StackPanel>
 
-                        <!-- Đèn trạng thái kết nối -->
-                        <StackPanel Orientation="Horizontal" Margin="0,4">
-                            <Ellipse Width="16" Height="16"
-                                     Margin="0,0,8,0"
-                                     Fill="{Binding RfidStatus, Converter={StaticResource StatusToColor}}"/>
-                            <TextBlock Text="{Binding RfidStatusText}"
-                                       Style="{StaticResource LabelStyle}"
-                                       FontWeight="Bold"/>
+                        <!--  Đèn trạng thái kết nối  -->
+                        <StackPanel Margin="0,4" Orientation="Horizontal">
+                            <Ellipse
+                                Width="16"
+                                Height="16"
+                                Margin="0,0,8,0"
+                                Fill="{Binding RfidStatus, Converter={StaticResource StatusToColor}}" />
+                            <TextBlock
+                                FontWeight="Bold"
+                                Style="{StaticResource LabelStyle}"
+                                Text="{Binding RfidStatusText}" />
                         </StackPanel>
 
-                        <!-- Label -->
-                        <TextBlock Text="Mã thẻ RFID:" Style="{StaticResource LabelStyle}"/>
+                        <!--  Label  -->
+                        <TextBlock Style="{StaticResource LabelStyle}" Text="Mã thẻ RFID:" />
 
                         <!--
-                        TextBox hiển thị mã thẻ RFID vừa quét.
-                        Binding: RfidValue
+                            TextBox hiển thị mã thẻ RFID vừa quét.
+                            Binding: RfidValue
                         -->
-                        <TextBox Style="{StaticResource ValueBox}"
-                                 Text="{Binding RfidValue, Mode=OneWay}"
-                                 Foreground="DarkGreen"/>
+                        <TextBox
+                            Foreground="DarkGreen"
+                            Style="{StaticResource ValueBox}"
+                            Text="{Binding RfidValue, Mode=OneWay}" />
 
-                        <!-- Thông tin COM port -->
+                        <!--  Thông tin COM port  -->
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Cổng COM: " Style="{StaticResource LabelStyle}"/>
-                            <TextBlock Text="Tự động tìm (DeviceCaption=Pongee)"
-                                       Style="{StaticResource LabelStyle}"
-                                       FontStyle="Italic" Foreground="#555"/>
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="Cổng COM: " />
+                            <TextBlock
+                                FontStyle="Italic"
+                                Foreground="#555"
+                                Style="{StaticResource LabelStyle}"
+                                Text="Tự động tìm (DeviceCaption=Pongee)" />
                         </StackPanel>
 
-                        <!-- Hướng dẫn -->
-                        <TextBlock Text="Đưa thẻ RFID vào đầu đọc để thấy mã số."
-                                   Style="{StaticResource LabelStyle}"
-                                   FontStyle="Italic"
-                                   Foreground="#888"
-                                   Margin="4,6,4,2"/>
+                        <!--  Hướng dẫn  -->
+                        <TextBlock
+                            Margin="4,6,4,2"
+                            FontStyle="Italic"
+                            Foreground="#888"
+                            Style="{StaticResource LabelStyle}"
+                            Text="Đưa thẻ RFID vào đầu đọc để thấy mã số." />
 
                     </StackPanel>
                 </GroupBox>
 
-                <!-- ===============================================
-                NHÓM 3: SCALE (TCP/IP)
-                =============================================== -->
-                <GroupBox Grid.Column="2"
-                          Header="⚖️ Cân điện tử (TCP/IP)"
-                          Style="{StaticResource DeviceGroupBox}">
+                <!--
+                    ===============================================
+                    NHÓM 3: SCALE (TCP/IP)
+                    ===============================================
+                -->
+                <GroupBox
+                    Grid.Column="2"
+                    Header="⚖️ Cân điện tử (TCP/IP)"
+                    Style="{StaticResource DeviceGroupBox}">
                     <StackPanel>
 
-                        <!-- Đèn trạng thái kết nối -->
-                        <StackPanel Orientation="Horizontal" Margin="0,4">
-                            <Ellipse Width="16" Height="16"
-                                     Margin="0,0,8,0"
-                                     Fill="{Binding ScaleStatus, Converter={StaticResource StatusToColor}}"/>
-                            <TextBlock Text="{Binding ScaleStatusText}"
-                                       Style="{StaticResource LabelStyle}"
-                                       FontWeight="Bold"/>
+                        <!--  Đèn trạng thái kết nối  -->
+                        <StackPanel Margin="0,4" Orientation="Horizontal">
+                            <Ellipse
+                                Width="16"
+                                Height="16"
+                                Margin="0,0,8,0"
+                                Fill="{Binding ScaleStatus, Converter={StaticResource StatusToColor}}" />
+                            <TextBlock
+                                FontWeight="Bold"
+                                Style="{StaticResource LabelStyle}"
+                                Text="{Binding ScaleStatusText}" />
                         </StackPanel>
 
-                        <!-- Giá trị cân -->
-                        <TextBlock Text="Giá trị cân:" Style="{StaticResource LabelStyle}"/>
+                        <!--  Giá trị cân  -->
+                        <TextBlock Style="{StaticResource LabelStyle}" Text="Giá trị cân:" />
 
                         <!--
-                        TextBox hiển thị trọng lượng.
-                        Màu chữ thay đổi theo Stable/Unstable.
-                        Màu nền thay đổi theo Tare.
+                            TextBox hiển thị trọng lượng.
+                            Màu chữ thay đổi theo Stable/Unstable.
+                            Màu nền thay đổi theo Tare.
                         -->
-                        <TextBox Style="{StaticResource ValueBox}"
-                                 Background="{Binding ScaleTare, Converter={StaticResource TareToBg}}"
-                                 Foreground="{Binding ScaleStable, Converter={StaticResource StableToFg}}">
+                        <TextBox
+                            Background="{Binding ScaleTare, Converter={StaticResource TareToBg}}"
+                            Foreground="{Binding ScaleStable, Converter={StaticResource StableToFg}}"
+                            Style="{StaticResource ValueBox}">
                             <!--
-                            Dùng ScaleDisplayText thay vì MultiBinding StringFormat
-                            để tránh timing mismatch khi hai binding update không đồng thời.
-                            ScaleDisplayText = $"{ScaleValue:F3} {ScaleUnit}" (tính trong ViewModel)
+                                Dùng ScaleDisplayText thay vì MultiBinding StringFormat
+                                để tránh timing mismatch khi hai binding update không đồng thời.
+                                ScaleDisplayText = $"{ScaleValue:F3} {ScaleUnit}" (tính trong ViewModel)
                             -->
                             <TextBox.Text>
-                                <Binding Path="ScaleDisplayText" Mode="OneWay"/>
+                                <Binding Mode="OneWay" Path="ScaleDisplayText" />
                             </TextBox.Text>
                         </TextBox>
 
-                        <!-- Trạng thái Stable và Tare -->
-                        <StackPanel Orientation="Horizontal" Margin="4,2">
-                            <!-- Stable indicator -->
-                            <Border Padding="6,2" CornerRadius="4" Margin="0,0,6,0"
-                                    Background="{Binding ScaleStable, Converter={StaticResource StableToFg}}">
-                                <TextBlock Foreground="White" FontSize="11" FontWeight="Bold"
-                                           Text="{Binding ScaleStable, StringFormat={}{0} (Stable)}"/>
+                        <!--  Trạng thái Stable và Tare  -->
+                        <StackPanel Margin="4,2" Orientation="Horizontal">
+                            <!--  Stable indicator  -->
+                            <Border
+                                Margin="0,0,6,0"
+                                Padding="6,2"
+                                Background="{Binding ScaleStable, Converter={StaticResource StableToFg}}"
+                                CornerRadius="4">
+                                <TextBlock
+                                    FontSize="11"
+                                    FontWeight="Bold"
+                                    Foreground="White"
+                                    Text="{Binding ScaleStable, StringFormat={}{0} (Stable)}" />
                             </Border>
 
-                            <!-- Tare indicator (chỉ hiện khi đang Tare) -->
-                            <Border Padding="6,2" CornerRadius="4"
-                                    Background="#FF6B6B"
-                                    Visibility="{Binding ScaleTare, Converter={StaticResource InvBoolToVis}}">
-                                <TextBlock Foreground="White" FontSize="11" FontWeight="Bold"
-                                           Text="TARE"/>
+                            <!--  Tare indicator (chỉ hiện khi đang Tare)  -->
+                            <Border
+                                Padding="6,2"
+                                Background="#FF6B6B"
+                                CornerRadius="4"
+                                Visibility="{Binding ScaleTare, Converter={StaticResource InvBoolToVis}}">
+                                <TextBlock
+                                    FontSize="11"
+                                    FontWeight="Bold"
+                                    Foreground="White"
+                                    Text="TARE" />
                             </Border>
                         </StackPanel>
 
-                        <!-- IP cân -->
+                        <!--  IP cân  -->
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="IP: " Style="{StaticResource LabelStyle}"/>
-                            <TextBlock Text="192.168.80.237:23 (Scale_DIGI)"
-                                       Style="{StaticResource LabelStyle}"
-                                       FontStyle="Italic" Foreground="#555"/>
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="IP: " />
+                            <TextBlock
+                                FontStyle="Italic"
+                                Foreground="#555"
+                                Style="{StaticResource LabelStyle}"
+                                Text="192.168.80.237:23 (Scale_DIGI)" />
                         </StackPanel>
 
                     </StackPanel>
@@ -321,35 +389,52 @@ Tất cả dữ liệu bind từ MainViewModel qua DataContext.
 
             </Grid>
 
-            <!-- ===================================================
-            HÀNG 2: LOG PANELS — 3 cột tương ứng với 3 thiết bị
-            =================================================== -->
+            <!--
+                ===================================================
+                HÀNG 2: LOG PANELS — 3 cột tương ứng với 3 thiết bị
+                ===================================================
+            -->
             <Grid Grid.Row="1" Margin="0,4,0,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Log Barcode -->
-                <GroupBox Grid.Column="0" Header="Log Barcode" Margin="6" FontSize="12">
-                    <TextBox Style="{StaticResource LogBox}"
-                             Text="{Binding BarcodeLog, Mode=OneWay}"
-                             Height="Auto"/>
+                <!--  Log Barcode  -->
+                <GroupBox
+                    Grid.Column="0"
+                    Margin="6"
+                    FontSize="12"
+                    Header="Log Barcode">
+                    <TextBox
+                        Height="Auto"
+                        Style="{StaticResource LogBox}"
+                        Text="{Binding BarcodeLog, Mode=OneWay}" />
                 </GroupBox>
 
-                <!-- Log RFID -->
-                <GroupBox Grid.Column="1" Header="Log RFID" Margin="6" FontSize="12">
-                    <TextBox Style="{StaticResource LogBox}"
-                             Text="{Binding RfidLog, Mode=OneWay}"
-                             Height="Auto"/>
+                <!--  Log RFID  -->
+                <GroupBox
+                    Grid.Column="1"
+                    Margin="6"
+                    FontSize="12"
+                    Header="Log RFID">
+                    <TextBox
+                        Height="Auto"
+                        Style="{StaticResource LogBox}"
+                        Text="{Binding RfidLog, Mode=OneWay}" />
                 </GroupBox>
 
-                <!-- Log Scale -->
-                <GroupBox Grid.Column="2" Header="Log Scale" Margin="6" FontSize="12">
-                    <TextBox Style="{StaticResource LogBox}"
-                             Text="{Binding ScaleLog, Mode=OneWay}"
-                             Height="Auto"/>
+                <!--  Log Scale  -->
+                <GroupBox
+                    Grid.Column="2"
+                    Margin="6"
+                    FontSize="12"
+                    Header="Log Scale">
+                    <TextBox
+                        Height="Auto"
+                        Style="{StaticResource LogBox}"
+                        Text="{Binding ScaleLog, Mode=OneWay}" />
                 </GroupBox>
 
             </Grid>
