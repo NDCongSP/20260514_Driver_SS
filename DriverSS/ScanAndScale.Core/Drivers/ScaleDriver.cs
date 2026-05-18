@@ -17,6 +17,16 @@
 // QUAN TRỌNG VỀ THREAD:
 //   Timer callback và đọc dữ liệu chạy trên ThreadPool thread.
 //   Trong WPF: dùng Application.Current.Dispatcher.Invoke(...)
+//
+// FIX (reconnect freeze):
+//   Dùng SemaphoreSlim thay Monitor để tránh SynchronizationLockException.
+//   Monitor.Exit() phải gọi trên cùng thread với Monitor.Enter().
+//   Sau await, code có thể resume trên thread khác → Exit ném exception
+//   trong finally → timer không bao giờ restart → giá trị đóng băng.
+//   SemaphoreSlim.Release() an toàn với mọi thread.
+//
+//   NetworkStream + StreamReader được giữ persistent suốt 1 kết nối
+//   (tạo lại khi reconnect) để tránh 2 read chạy song song khi timeout.
 // ============================================================
 
 using ScanAndScale.Core.Models;
@@ -45,6 +55,9 @@ namespace ScanAndScale.Core.Drivers
         // ===================================================
         private TcpClient?              _tcpClient;
         private Socket?                 _socket;
+        private NetworkStream?          _networkStream;     // Persistent — tạo 1 lần/kết nối
+        private StreamReader?           _streamReader;      // Persistent — tạo 1 lần/kết nối
+        private Task<string?>?          _pendingReadTask;   // ReadLineAsync đang chờ (dùng lại khi timeout)
         private System.Timers.Timer?    _readTimer;
         private ScaleConfig?            _config;
         private object?                 _scaleModelInstance;
@@ -56,8 +69,9 @@ namespace ScanAndScale.Core.Drivers
         private bool    _isTare;
         private string  _unit     = "KG";
 
-        private readonly object _timerLock = new object();
-        private bool            _disposed  = false;
+        // ── FIX: SemaphoreSlim thay Monitor — Release() an toàn mọi thread ──
+        private readonly SemaphoreSlim _timerSemaphore = new SemaphoreSlim(1, 1);
+        private bool                   _disposed        = false;
 
         // ── Auto-reconnect ──────────────────────────────────
         private CancellationTokenSource? _reconnectCts;
@@ -250,6 +264,9 @@ namespace ScanAndScale.Core.Drivers
                 await connectTask;
                 _socket = _tcpClient.Client;
 
+                // Tạo persistent stream/reader cho kết nối này
+                CreateStreamReader();
+
                 LogInfo($"Kết nối TCP thành công: {_config.IP}:{_config.Port}");
                 StartReadTimer();
             }
@@ -274,7 +291,12 @@ namespace ScanAndScale.Core.Drivers
 
         private async void OnReadTimerElapsed(object? sender, System.Timers.ElapsedEventArgs e)
         {
-            if (!Monitor.TryEnter(_timerLock)) return;
+            // ── FIX: SemaphoreSlim.Wait(0) thay Monitor.TryEnter ──────────────
+            // Monitor.Exit() ném SynchronizationLockException nếu gọi từ thread khác
+            // với thread đã TryEnter — điều này xảy ra thường xuyên sau async/await
+            // vì ThreadPool không đảm bảo resume trên cùng thread.
+            // SemaphoreSlim.Release() an toàn với bất kỳ thread nào.
+            if (!_timerSemaphore.Wait(0)) return;
 
             try
             {
@@ -298,12 +320,42 @@ namespace ScanAndScale.Core.Drivers
             }
             finally
             {
-                Monitor.Exit(_timerLock);
+                // Release() luôn an toàn bất kể đang ở thread nào
+                _timerSemaphore.Release();
             }
 
             // Restart timer chỉ khi không đang reconnect
             if (!_disposed && !_isReconnecting && _readTimer != null)
                 _readTimer.Start();
+        }
+
+        // ===================================================
+        // STREAM READER HELPERS
+        // ===================================================
+
+        /// <summary>
+        /// Tạo NetworkStream + StreamReader persistent từ socket hiện tại.
+        /// Dispose stream/reader cũ trước khi tạo mới.
+        /// </summary>
+        private void CreateStreamReader()
+        {
+            DisposeStreamReader();
+            if (_socket == null) return;
+            // ownsSocket: false — socket do _tcpClient quản lý, không đóng khi stream dispose
+            _networkStream = new NetworkStream(_socket, ownsSocket: false);
+            _streamReader  = new StreamReader(_networkStream);
+            _pendingReadTask = null;
+            LogInfo("NetworkStream + StreamReader đã khởi tạo.");
+        }
+
+        /// <summary>Dispose stream/reader và xóa pending task.</summary>
+        private void DisposeStreamReader()
+        {
+            _pendingReadTask = null;
+            try { _streamReader?.Dispose(); }  catch { /* ignored */ }
+            try { _networkStream?.Dispose(); } catch { /* ignored */ }
+            _streamReader  = null;
+            _networkStream = null;
         }
 
         // ===================================================
@@ -313,19 +365,27 @@ namespace ScanAndScale.Core.Drivers
         {
             try
             {
-                using var stream = new NetworkStream(_socket!);
-                using var reader = new StreamReader(stream);
+                if (_streamReader == null)
+                    throw new InvalidOperationException("StreamReader chưa được khởi tạo.");
 
-                var readTask    = reader.ReadLineAsync();
+                // ── FIX: Tái sử dụng pending task nếu vẫn còn chạy (timeout tick trước) ──
+                // Gọi ReadLineAsync() hai lần đồng thời trên cùng StreamReader là lỗi.
+                // Nếu tick trước bị timeout mà chưa đọc xong, dùng lại task đó.
+                if (_pendingReadTask == null || _pendingReadTask.IsCompleted)
+                    _pendingReadTask = _streamReader.ReadLineAsync();
+
                 var timeoutTask = Task.Delay(3000);
 
-                if (await Task.WhenAny(readTask, timeoutTask) == timeoutTask)
+                if (await Task.WhenAny(_pendingReadTask, timeoutTask) == timeoutTask)
                 {
-                    LogInfo("Timeout đọc dữ liệu từ cân.");
+                    LogInfo("Timeout đọc dữ liệu từ cân — chờ tick tiếp theo.");
+                    // _pendingReadTask còn chạy, sẽ được tái sử dụng ở tick kế
                     return;
                 }
 
-                RawData = await readTask;
+                RawData = await _pendingReadTask;
+                _pendingReadTask = null;    // Task đã hoàn thành, reset
+
                 if (string.IsNullOrEmpty(RawData)) return;
 
                 ParseScaleData(RawData);
@@ -334,6 +394,7 @@ namespace ScanAndScale.Core.Drivers
             catch (Exception ex)
             {
                 // Lỗi network → báo Disconnected và khởi động reconnect
+                _pendingReadTask = null;
                 LogError(ex, "ReadScaleDataAsync");
                 SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
                 StartReconnectLoop();
@@ -418,7 +479,8 @@ namespace ScanAndScale.Core.Drivers
         {
             try
             {
-                // Đóng socket/client cũ
+                // Đóng stream/reader và socket/client cũ
+                DisposeStreamReader();
                 try { _socket?.Close();   } catch { /* ignored */ }
                 try { _tcpClient?.Close(); _tcpClient?.Dispose(); } catch { /* ignored */ }
                 _socket    = null;
@@ -436,6 +498,9 @@ namespace ScanAndScale.Core.Drivers
 
                 await connectTask;
                 _socket = _tcpClient.Client;
+
+                // Tạo persistent stream/reader cho kết nối mới
+                CreateStreamReader();
 
                 SetDataValue(new DataValue(DriverStatus.Connected, 0.0));
                 return true;
@@ -463,6 +528,9 @@ namespace ScanAndScale.Core.Drivers
                 _readTimer?.Stop();
                 _readTimer?.Dispose();
                 _readTimer = null;
+
+                // Dispose stream/reader trước khi đóng socket
+                DisposeStreamReader();
 
                 _socket?.Close();
                 _socket = null;
@@ -504,6 +572,8 @@ namespace ScanAndScale.Core.Drivers
             _reconnectCts = null;
 
             Disconnect();
+
+            _timerSemaphore.Dispose();
             GC.SuppressFinalize(this);
         }
 
