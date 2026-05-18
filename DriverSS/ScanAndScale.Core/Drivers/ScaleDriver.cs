@@ -55,9 +55,6 @@ namespace ScanAndScale.Core.Drivers
         // ===================================================
         private TcpClient?              _tcpClient;
         private Socket?                 _socket;
-        private NetworkStream?          _networkStream;     // Persistent — tạo 1 lần/kết nối
-        private StreamReader?           _streamReader;      // Persistent — tạo 1 lần/kết nối
-        private Task<string?>?          _pendingReadTask;   // ReadLineAsync đang chờ (dùng lại khi timeout)
         private System.Timers.Timer?    _readTimer;
         private ScaleConfig?            _config;
         private object?                 _scaleModelInstance;
@@ -264,9 +261,6 @@ namespace ScanAndScale.Core.Drivers
                 await connectTask;
                 _socket = _tcpClient.Client;
 
-                // Tạo persistent stream/reader cho kết nối này
-                CreateStreamReader();
-
                 LogInfo($"Kết nối TCP thành công: {_config.IP}:{_config.Port}");
                 StartReadTimer();
             }
@@ -296,19 +290,24 @@ namespace ScanAndScale.Core.Drivers
             // với thread đã TryEnter — điều này xảy ra thường xuyên sau async/await
             // vì ThreadPool không đảm bảo resume trên cùng thread.
             // SemaphoreSlim.Release() an toàn với bất kỳ thread nào.
-            if (!_timerSemaphore.Wait(0)) return;
+            if (!_timerSemaphore.Wait(0))
+            {
+                LogInfo("[Timer] Semaphore busy — bỏ qua tick này.");
+                return;
+            }
 
             try
             {
                 // Kiểm tra kết nối TCP
                 if (_tcpClient == null || !_tcpClient.Connected)
                 {
-                    LogInfo("TCP mất kết nối — khởi động auto-reconnect.");
+                    LogInfo($"[Timer] TCP không kết nối (Connected={_tcpClient?.Connected}) — khởi động auto-reconnect.");
                     SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
                     StartReconnectLoop();   // Reconnect loop sẽ restart timer sau khi thành công
                     return;                 // Không restart timer ở đây
                 }
 
+                LogInfo("[Timer] Đang đọc dữ liệu cân...");
                 await ReadScaleDataAsync();
             }
             catch (Exception ex)
@@ -330,71 +329,37 @@ namespace ScanAndScale.Core.Drivers
         }
 
         // ===================================================
-        // STREAM READER HELPERS
-        // ===================================================
-
-        /// <summary>
-        /// Tạo NetworkStream + StreamReader persistent từ socket hiện tại.
-        /// Dispose stream/reader cũ trước khi tạo mới.
-        /// </summary>
-        private void CreateStreamReader()
-        {
-            DisposeStreamReader();
-            if (_socket == null) return;
-            // ownsSocket: false — socket do _tcpClient quản lý, không đóng khi stream dispose
-            _networkStream = new NetworkStream(_socket, ownsSocket: false);
-            _streamReader  = new StreamReader(_networkStream);
-            _pendingReadTask = null;
-            LogInfo("NetworkStream + StreamReader đã khởi tạo.");
-        }
-
-        /// <summary>Dispose stream/reader và xóa pending task.</summary>
-        private void DisposeStreamReader()
-        {
-            _pendingReadTask = null;
-            try { _streamReader?.Dispose(); }  catch { /* ignored */ }
-            try { _networkStream?.Dispose(); } catch { /* ignored */ }
-            _streamReader  = null;
-            _networkStream = null;
-        }
-
-        // ===================================================
         // READ & PARSE
         // ===================================================
         private async Task ReadScaleDataAsync()
         {
             try
             {
-                if (_streamReader == null)
-                    throw new InvalidOperationException("StreamReader chưa được khởi tạo.");
+                // Tạo NetworkStream + StreamReader mỗi lần đọc (không giữ persistent)
+                // ownsSocket: false → NetworkStream.Dispose() không đóng socket
+                using var stream = new NetworkStream(_socket!, ownsSocket: false);
+                using var reader = new StreamReader(stream);
 
-                // ── FIX: Tái sử dụng pending task nếu vẫn còn chạy (timeout tick trước) ──
-                // Gọi ReadLineAsync() hai lần đồng thời trên cùng StreamReader là lỗi.
-                // Nếu tick trước bị timeout mà chưa đọc xong, dùng lại task đó.
-                if (_pendingReadTask == null || _pendingReadTask.IsCompleted)
-                    _pendingReadTask = _streamReader.ReadLineAsync();
-
+                var readTask    = reader.ReadLineAsync();
                 var timeoutTask = Task.Delay(3000);
 
-                if (await Task.WhenAny(_pendingReadTask, timeoutTask) == timeoutTask)
+                if (await Task.WhenAny(readTask, timeoutTask) == timeoutTask)
                 {
-                    LogInfo("Timeout đọc dữ liệu từ cân — chờ tick tiếp theo.");
-                    // _pendingReadTask còn chạy, sẽ được tái sử dụng ở tick kế
+                    LogInfo("Timeout đọc dữ liệu từ cân.");
+                    // readTask bị bỏ, stream/reader sẽ bị dispose khi using kết thúc
                     return;
                 }
 
-                RawData = await _pendingReadTask;
-                _pendingReadTask = null;    // Task đã hoàn thành, reset
-
+                RawData = await readTask;
                 if (string.IsNullOrEmpty(RawData)) return;
 
                 ParseScaleData(RawData);
+                LogInfo($"[Read OK] {_weightKg:F3} {_unit} (raw: {RawData?.Trim()})");
                 SetDataValue(new DataValue(DriverStatus.Connected, _weightKg));
             }
             catch (Exception ex)
             {
                 // Lỗi network → báo Disconnected và khởi động reconnect
-                _pendingReadTask = null;
                 LogError(ex, "ReadScaleDataAsync");
                 SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
                 StartReconnectLoop();
@@ -479,8 +444,7 @@ namespace ScanAndScale.Core.Drivers
         {
             try
             {
-                // Đóng stream/reader và socket/client cũ
-                DisposeStreamReader();
+                // Đóng socket/client cũ
                 try { _socket?.Close();   } catch { /* ignored */ }
                 try { _tcpClient?.Close(); _tcpClient?.Dispose(); } catch { /* ignored */ }
                 _socket    = null;
@@ -493,14 +457,14 @@ namespace ScanAndScale.Core.Drivers
                 if (await Task.WhenAny(connectTask, timeoutTask) == timeoutTask)
                 {
                     LogInfo($"[Reconnect] TCP timeout ({ConnectTimeoutMs}ms). IP: {_config.IP}");
+                    // Observe connectTask để tránh UnobservedTaskException
+                    _ = connectTask.ContinueWith(t => { _ = t.Exception; },
+                            TaskContinuationOptions.OnlyOnFaulted);
                     return false;
                 }
 
                 await connectTask;
                 _socket = _tcpClient.Client;
-
-                // Tạo persistent stream/reader cho kết nối mới
-                CreateStreamReader();
 
                 SetDataValue(new DataValue(DriverStatus.Connected, 0.0));
                 return true;
@@ -528,9 +492,6 @@ namespace ScanAndScale.Core.Drivers
                 _readTimer?.Stop();
                 _readTimer?.Dispose();
                 _readTimer = null;
-
-                // Dispose stream/reader trước khi đóng socket
-                DisposeStreamReader();
 
                 _socket?.Close();
                 _socket = null;
