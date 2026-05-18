@@ -351,10 +351,25 @@ namespace ScanAndScale.Core.Drivers
                 }
 
                 RawData = await readTask;
-                if (string.IsNullOrEmpty(RawData)) return;
+
+                // null = EOF — scale đóng kết nối từ phía nó (FIN packet)
+                // TcpClient.Connected không phát hiện được EOF nên phải check thủ công
+                if (RawData == null)
+                {
+                    LogInfo("[Read] EOF nhận được — scale đã đóng kết nối. Trigger reconnect.");
+                    SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
+                    StartReconnectLoop();
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(RawData))
+                {
+                    LogInfo("[Read] Dòng rỗng — bỏ qua.");
+                    return;
+                }
 
                 ParseScaleData(RawData);
-                LogInfo($"[Read OK] {_weightKg:F3} {_unit} (raw: {RawData?.Trim()})");
+                LogInfo($"[Read OK] {_weightKg:F3} {_unit} (raw: '{RawData.Trim()}')");
                 SetDataValue(new DataValue(DriverStatus.Connected, _weightKg));
             }
             catch (Exception ex)
