@@ -24,6 +24,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Scale_Vibra_HAW30", "Scale_
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Scale_Vibra_SJ6200", "Scale_Vibra_SJ6200\Scale_Vibra_SJ6200.csproj", "{A1B2C3D4-0007-0007-0007-000000000007}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Scale_Shimadzu_TX4202L", "Scale_Shimadzu_TX4202L\Scale_Shimadzu_TX4202L.csproj", "{D4AB5CD9-DC9D-4FCC-8526-20DFF8368744}"
+EndProject
 
 # --- Core Library (multi-target) ---
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScanAndScale.Core", "ScanAndScale.Core\ScanAndScale.Core.csproj", "{A1B2C3D4-0001-0001-0001-000000000001}"
@@ -64,6 +66,11 @@ Global
 		{A1B2C3D4-0007-0007-0007-000000000007}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1B2C3D4-0007-0007-0007-000000000007}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A1B2C3D4-0007-0007-0007-000000000007}.Release|Any CPU.Build.0 = Release|Any CPU
+		# Scale_Shimadzu_TX4202L
+		{D4AB5CD9-DC9D-4FCC-8526-20DFF8368744}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D4AB5CD9-DC9D-4FCC-8526-20DFF8368744}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D4AB5CD9-DC9D-4FCC-8526-20DFF8368744}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D4AB5CD9-DC9D-4FCC-8526-20DFF8368744}.Release|Any CPU.Build.0 = Release|Any CPU
 		# ScanAndScale.Core
 		{A1B2C3D4-0001-0001-0001-000000000001}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{A1B2C3D4-0001-0001-0001-000000000001}.Debug|Any CPU.Build.0 = Debug|Any CPU

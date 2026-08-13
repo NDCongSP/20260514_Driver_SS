@@ -110,6 +110,11 @@
       <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
       <Private>false</Private>
     </ProjectReference>
+    <ProjectReference Include="..\Scale_Shimadzu_TX4202L\Scale_Shimadzu_TX4202L.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <Private>false</Private>
+    </ProjectReference>
   </ItemGroup>
 
   <!--
@@ -160,6 +165,13 @@
 
     <!-- Build Scale_Vibra_SJ6200 -->
     <MSBuild Projects="..\Scale_Vibra_SJ6200\Scale_Vibra_SJ6200.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0">
+      <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsBuilt"/>
+    </MSBuild>
+
+    <!-- Build Scale_Shimadzu_TX4202L -->
+    <MSBuild Projects="..\Scale_Shimadzu_TX4202L\Scale_Shimadzu_TX4202L.csproj"
              Targets="Build"
              Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0">
       <Output TaskParameter="TargetOutputs" ItemName="_ScaleDllsBuilt"/>

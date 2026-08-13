@@ -30,10 +30,13 @@ namespace ScanAndScale.Core.Models
         /// <summary>Cân mẫu / test — format Vibra generic</summary>
         public const string SampleReading = "Scale_SampleReading";
 
+        /// <summary>Cân Shimadzu TX4202L (dòng UniBloc, max 4200g) — format: "48.08g"</summary>
+        public const string Shimadzu_TX4202L = "Scale_Shimadzu_TX4202L";
+
         /// <summary>Danh sách tất cả tên model hợp lệ.</summary>
         public static readonly string[] All =
         {
-            DIGI, IND_KG, Vibra_SJ6200, Vibra_HAW30, SampleReading
+            DIGI, IND_KG, Vibra_SJ6200, Vibra_HAW30, SampleReading, Shimadzu_TX4202L
         };
     }
 
@@ -103,7 +106,8 @@ namespace ScanAndScale.Core.Models
         /// <summary>
         /// Tên model cân — tương ứng với tên DLL parser.
         /// Các giá trị hợp lệ: "Scale_DIGI", "Scale_IND_KG", "Scale_Vibra_HAW30",
-        ///                      "Scale_Vibra_SJ6200", "Scale_SampleReading".
+        ///                      "Scale_Vibra_SJ6200", "Scale_SampleReading",
+        ///                      "Scale_Shimadzu_TX4202L".
         /// DLL tương ứng (ví dụ Scale_DIGI.dll) phải nằm trong thư mục chạy của ứng dụng.
         /// Mặc định: "Scale_DIGI".
         /// </summary>

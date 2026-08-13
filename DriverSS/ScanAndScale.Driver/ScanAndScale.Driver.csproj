@@ -27,6 +27,7 @@
 		<ProjectReference Include="..\Scale_SampleReading\Scale_SampleReading.csproj" />
 		<ProjectReference Include="..\Scale_Vibra_HAW30\Scale_Vibra_HAW30.csproj" />
 		<ProjectReference Include="..\Scale_Vibra_SJ6200\Scale_Vibra_SJ6200.csproj" />
+		<ProjectReference Include="..\Scale_Shimadzu_TX4202L\Scale_Shimadzu_TX4202L.csproj" />
 		<ProjectReference Include="..\ScanAndScale.Helper\ScanAndScale.Helper.csproj" />
 	</ItemGroup>
 

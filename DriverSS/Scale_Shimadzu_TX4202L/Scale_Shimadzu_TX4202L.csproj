@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+  ============================================================
+  Scale_Shimadzu_TX4202L - Parser can Shimadzu TX4202L
+  (dong UniBloc, max 4200g, d=0.01g) - format: "48.08g"
+  ============================================================
+  netstandard2.0: tuong thich voi .NET Framework 4.7.2, .NET 6, .NET 8
+
+  Cach dung: ScanAndScale.Core tu dong load DLL nay tai runtime
+  qua Reflection khi ScaleConfig.ModelName = "Scale_Shimadzu_TX4202L".
+  ============================================================
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <AssemblyName>Scale_Shimadzu_TX4202L</AssemblyName>
+    <RootNamespace>Scale_Shimadzu_TX4202L</RootNamespace>
+    <Description>Parser can Shimadzu TX4202L (UniBloc) - format: 48.08g</Description>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+</Project>

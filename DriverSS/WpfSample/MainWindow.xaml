@@ -374,14 +374,36 @@
                             </Border>
                         </StackPanel>
 
-                        <!--  IP cân  -->
-                        <StackPanel Orientation="Horizontal">
+                        <!--
+                            Chọn driver cân.
+                            ItemsSource: ScaleModelNames.All (Scale_DIGI, Scale_IND_KG, ...).
+                            Chỉ cho sửa khi CHƯA kết nối (CanEditScaleConfig) — tránh đổi
+                            driver/IP giữa chừng trong khi ScaleDriver đang chạy.
+                        -->
+                        <StackPanel Margin="4,6,4,0" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="Driver: " />
+                            <ComboBox
+                                Width="190"
+                                VerticalAlignment="Center"
+                                IsEnabled="{Binding CanEditScaleConfig}"
+                                ItemsSource="{Binding AvailableScaleModels}"
+                                SelectedItem="{Binding SelectedScaleModel}" />
+                        </StackPanel>
+
+                        <!--  IP + Port cân — nhập tay, áp dụng khi bấm "Kết nối tất cả"  -->
+                        <StackPanel Margin="4,4,4,0" Orientation="Horizontal">
                             <TextBlock Style="{StaticResource LabelStyle}" Text="IP: " />
-                            <TextBlock
-                                FontStyle="Italic"
-                                Foreground="#555"
-                                Style="{StaticResource LabelStyle}"
-                                Text="192.168.80.237:23 (Scale_DIGI)" />
+                            <TextBox
+                                Width="120"
+                                VerticalAlignment="Center"
+                                IsEnabled="{Binding CanEditScaleConfig}"
+                                Text="{Binding ScaleIp, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Style="{StaticResource LabelStyle}" Text=" : " />
+                            <TextBox
+                                Width="50"
+                                VerticalAlignment="Center"
+                                IsEnabled="{Binding CanEditScaleConfig}"
+                                Text="{Binding ScalePort, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
 
                     </StackPanel>

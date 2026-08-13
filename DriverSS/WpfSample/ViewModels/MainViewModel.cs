@@ -64,6 +64,11 @@ namespace WpfSample.ViewModels
         private DriverStatus _scaleStatus = DriverStatus.Unknown;
         private string _scaleLog = "";
 
+        // --- Scale config (chọn driver + nhập IP trên UI) ---
+        private string _selectedScaleModel = ScaleModelNames.Vibra_HAW30;
+        private string _scaleIp = "192.168.80.237";
+        private int _scalePort = 23;
+
         // --- UI State ---
         private bool _isInitialized = false;
         private string _statusMessage = "Chưa khởi tạo. Nhấn 'Kết nối' để bắt đầu.";
@@ -218,6 +223,51 @@ namespace WpfSample.ViewModels
         }
 
         // ===================================================
+        // PROPERTIES — CẤU HÌNH CÂN (chọn driver + nhập IP trên UI)
+        // ===================================================
+
+        /// <summary>
+        /// Danh sách tên model cân hợp lệ để đổ vào ComboBox.
+        /// Lấy trực tiếp từ <see cref="ScaleModelNames.All"/> — thêm driver cân mới
+        /// (Scale_XXX.csproj + đăng ký ScaleModelNames) sẽ tự động xuất hiện ở đây.
+        /// </summary>
+        public IReadOnlyList<string> AvailableScaleModels { get; } = ScaleModelNames.All;
+
+        /// <summary>
+        /// Model cân đang được chọn trên UI (ComboBox "Driver").
+        /// Binding: {Binding SelectedScaleModel} — TwoWay qua SelectedItem.
+        /// </summary>
+        public string SelectedScaleModel
+        {
+            get => _selectedScaleModel;
+            set => SetProperty(ref _selectedScaleModel, value);
+        }
+
+        /// <summary>
+        /// Địa chỉ IP của cân, nhập tay trên UI (TextBox "IP").
+        /// Áp dụng vào <see cref="ScaleConfig"/> khi bấm "Kết nối tất cả".
+        /// </summary>
+        public string ScaleIp
+        {
+            get => _scaleIp;
+            set => SetProperty(ref _scaleIp, value);
+        }
+
+        /// <summary>Cổng TCP của cân, nhập tay trên UI (TextBox "Port"). Mặc định 23 (Telnet).</summary>
+        public int ScalePort
+        {
+            get => _scalePort;
+            set => SetProperty(ref _scalePort, value);
+        }
+
+        /// <summary>
+        /// Cho phép sửa Driver/IP/Port trên UI hay không.
+        /// Chỉ cho sửa khi CHƯA kết nối — tránh đổi cấu hình giữa chừng
+        /// trong khi ScaleDriver đang chạy (phải Ngắt kết nối trước).
+        /// </summary>
+        public bool CanEditScaleConfig => !_isInitialized;
+
+        // ===================================================
         // PROPERTIES — TRẠNG THÁI CHUNG
         // ===================================================
 
@@ -238,6 +288,8 @@ namespace WpfSample.ViewModels
                 {
                     // Thông báo WPF cập nhật lại các Command (enable/disable nút)
                     RelayCommand.RaiseCanExecuteChanged();
+                    // Đã kết nối → khóa ComboBox Driver + TextBox IP/Port trên UI
+                    OnPropertyChanged(nameof(CanEditScaleConfig));
                 }
             }
         }
@@ -280,22 +332,32 @@ namespace WpfSample.ViewModels
             BaudRate = 9600              // Tốc độ baud của thiết bị RFID
         };
 
-        // Cấu hình Scale (TCP/IP)
-        private readonly ScaleConfig _scaleConfig = new ScaleConfig
+        // Cấu hình Scale (TCP/IP) — Driver/IP/Port lấy từ UI (SelectedScaleModel/ScaleIp/ScalePort),
+        // các thông số còn lại giữ giá trị mặc định hợp lý cho demo.
+        // Xem BuildScaleConfig() — được gọi lại mỗi lần InitializeAllDrivers().
+        private const int    ScaleTimeScanMs = 400;   // Đọc mỗi 400ms
+        private const double ScaleCalibZero  = 0.0;   // Hiệu chỉnh offset
+        private const double ScaleCalibGain  = 1.0;   // Hệ số nhân
+        private const int    ScaleDecimalNum = 3;      // Số chữ số thập phân
+
+        /// <summary>
+        /// Dựng <see cref="ScaleConfig"/> từ giá trị Driver/IP/Port đang chọn trên UI.
+        /// Dùng ScaleModelNames thay cho string thô → tránh typo, IntelliSense hỗ trợ.
+        /// DLL model cân (Scale_DIGI.dll, ...) đã được nhúng vào ScanAndScale.Core.dll —
+        /// không cần file bên ngoài.
+        /// </summary>
+        private ScaleConfig BuildScaleConfig() => new ScaleConfig
         {
-            Enable = true,
-            IP = "192.168.80.237",    // ← Thay bằng IP thực của cân
-            Port = 23,                 // Cổng Telnet của cân
-            // Dùng ScaleModelNames thay cho string thô → tránh typo, IntelliSense hỗ trợ
-            // Các lựa chọn: ScaleModelNames.DIGI, IND_KG, Vibra_SJ6200, Vibra_HAW30, SampleReading
-            // Scale_DIGI.dll đã được nhúng vào ScanAndScale.Core.dll — không cần file bên ngoài
-            ModelName = ScaleModelNames.Vibra_HAW30,
-            TimeScanMs = 400,          // Đọc mỗi 400ms
-            CalibZero = 0.0,           // Hiệu chỉnh offset
-            CalibGain = 1.0,           // Hệ số nhân
-            DecimalNum = 3,            // Số chữ số thập phân
+            Enable      = true,
+            IP          = _scaleIp,
+            Port        = _scalePort,
+            ModelName   = _selectedScaleModel,
+            TimeScanMs  = ScaleTimeScanMs,
+            CalibZero   = ScaleCalibZero,
+            CalibGain   = ScaleCalibGain,
+            DecimalNum  = ScaleDecimalNum,
             CheckStable = false,       // Không yêu cầu stable
-            CheckTare = false          // Không kiểm tra tare
+            CheckTare   = false        // Không kiểm tra tare
         };
 
         // ===================================================
@@ -377,11 +439,13 @@ namespace WpfSample.ViewModels
             // ------------------------------------------------
             // Scale DLL (Scale_DIGI.dll, ...) đã nhúng trong ScanAndScale.Core.dll —
             // ScaleDriver.Initialize() tự load từ EmbeddedResource, không cần file bên ngoài.
+            // Driver/IP/Port lấy trực tiếp từ lựa chọn hiện tại trên UI.
+            var scaleConfig = BuildScaleConfig();
             _scaleDriver = new ScaleDriver();
             _scaleDriver.DataValueChanged += OnScaleDataChanged;
-            _scaleDriver.Initialize(_scaleConfig);
+            _scaleDriver.Initialize(scaleConfig);
             AppendLog(ref _scaleLog, nameof(ScaleLog),
-                $"Đang kết nối cân {_scaleConfig.ModelName} tại {_scaleConfig.IP}:{_scaleConfig.Port}...");
+                $"Đang kết nối cân {scaleConfig.ModelName} tại {scaleConfig.IP}:{scaleConfig.Port}...");
 
             IsInitialized = true;
             StatusMessage = "Tất cả drivers đã được khởi tạo. Đang lắng nghe dữ liệu...";
