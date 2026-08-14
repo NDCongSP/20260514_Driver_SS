@@ -53,6 +53,14 @@ namespace Scale_Shimadzu_TX4202L
         private const double StableToleranceG = 0.02; // Bien do toi da (gram) de coi la on dinh
         private static readonly Queue<double> _recentWeights = new Queue<double>();
 
+        // ─── Diagnostic: cho phep ScaleDriver/UI doc duoc so lieu tinh Stable thuc te ──
+        // ScaleDriver.GetWeight() dung reflection voi signature CO DINH nen KHONG the
+        // them out-param moi ma khong lam vo cac Scale_* khac. Thay vao do, expose them
+        // 1 static field rieng (optional - ScaleDriver doc "best-effort" qua reflection,
+        // Scale_* khac khong co field nay van hoat dong binh thuong) de debug xem thuc te
+        // window/range dang la bao nhieu, thay vi doan mo khi Stable cu mai la False.
+        public static string LastStabilityInfo = "";
+
         private static bool UpdateStability(double weight)
         {
             _recentWeights.Enqueue(weight);
@@ -60,7 +68,10 @@ namespace Scale_Shimadzu_TX4202L
                 _recentWeights.Dequeue();
 
             if (_recentWeights.Count < StableWindowSize)
+            {
+                LastStabilityInfo = $"win={_recentWeights.Count}/{StableWindowSize} (chua du du lieu)";
                 return false; // Chua du du lieu trong cua so - chua the ket luan
+            }
 
             double min = double.MaxValue, max = double.MinValue;
             foreach (var w in _recentWeights)
@@ -68,7 +79,10 @@ namespace Scale_Shimadzu_TX4202L
                 if (w < min) min = w;
                 if (w > max) max = w;
             }
-            return (max - min) <= StableToleranceG;
+            double range = max - min;
+            bool stable = range <= StableToleranceG;
+            LastStabilityInfo = $"win={_recentWeights.Count}/{StableWindowSize} range={range:F3}g (tol={StableToleranceG:F2}g) -> {(stable ? "ON DINH" : "CHUA on dinh")}";
+            return stable;
         }
 
         public static void GetWeight(out double? WeightValue, out bool? Stable, out bool? Tare, out string Unit, string rawData)

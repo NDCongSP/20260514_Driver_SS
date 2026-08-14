@@ -188,21 +188,16 @@ const delay = 350; // gán delay bằng 350
 ```yaml
 # Cập nhật phần này MỖI KHI kết thúc session làm việc
 active_context:
-  current_task:     "Đã thêm driver cân Shimadzu TX4202L + UI chọn driver/IP trong WpfSample + fix build NETSDK1005"
+  current_task:     "Cân Shimadzu TX4202L: giá trị hiển thị đúng + real-time, nhưng badge 'False (Stable)' KHÔNG bao giờ chuyển True dù cân đã đứng yên nhiều giây (log Log Scale toàn 'Stable:False' lặp lại) — đã thêm diagnostic StabilityDebugInfo để xem đúng con số thực tế thay vì đoán mò, CHƯA có kết quả test lại từ user"
   related_files:
-    - "Scale_Shimadzu_TX4202L/Scale_Shimadzu_TX4202L.csproj"
-    - "Scale_Shimadzu_TX4202L/ScaleReading.cs"
-    - "ScanAndScale.Core/Models/ScaleConfig.cs"          # ScaleModelNames.Shimadzu_TX4202L
-    - "ScanAndScale.Core/ScanAndScale.Core.csproj"        # ProjectReference + SetTargetFramework fix
-    - "ScanAndScale.Driver/ScanAndScale.Driver.csproj"    # ProjectReference
-    - "ScanAndScale.sln / ScanAndScaleDriver.sln"         # đăng ký project mới
-    - "WpfSample/MainWindow.xaml"                         # ComboBox Driver + TextBox IP/Port
-    - "WpfSample/ViewModels/MainViewModel.cs"             # BuildScaleConfig(), CanEditScaleConfig
-  blocked_by:       "Đã fix root cause đọc đứt gãy giữa số (2 read chạy song song trên cùng socket khi backlog-drain bỏ dở 1 read) — CHƯA test lại lần 2 với cân vật lý thật"
-  next_step:        "User chạy lại WpfSample (VS: F5) với driver Scale_Shimadzu_TX4202L, IP 192.168.80.237, xác nhận giá trị hiển thị KHÔNG còn đứt gãy (không còn kiểu '0.044 KG' sai khi cân thật là 113.xx) và bắt kịp real-time; xem panel 'Log Scale' (log kèm RawData) để đối chiếu nếu còn sai"
+    - "Scale_Shimadzu_TX4202L/ScaleReading.cs"            # UpdateStability() + LastStabilityInfo (debug field mới)
+    - "ScanAndScale.Core/Drivers/ScaleDriver.cs"          # _stabilityDebugField (reflection best-effort) + StabilityDebugInfo property
+    - "WpfSample/ViewModels/MainViewModel.cs"             # Log Scale in kèm StabilityDebugInfo
+  blocked_by:       "Chưa rõ root cause thật của bug Stable=false mãi mãi — về lý thuyết code ĐÚNG (StableWindowSize=5, StableToleranceG=0.02g, TimeScanMs=400ms => phải lên True trong ~2s nếu 5 giá trị liên tiếp giống hệt nhau). Đã verify: build KHÔNG stale (đã rebuild sạch, grep binary xác nhận UpdateStability/LastStabilityInfo có trong DLL đang chạy). Nghi vấn còn lại: (1) nhiễu raw thực tế giữa các lần đọc > 0.02g dù hiển thị làm tròn giống nhau, hoặc (2) app WpfSample.exe lúc user test là process CŨ chưa restart sau build mới."
+  next_step:        "User Rebuild Solution (MSBuild, KHÔNG dùng dotnet CLI) → ĐÓNG HẲN WpfSample.exe đang chạy (nếu có) → mở lại từ đầu → kết nối cân Shimadzu → để cân đứng yên vài giây → đọc dòng '[win=x/5 range=...g (tol=0.02g) -> ...]' mới xuất hiện trong panel Log Scale, gửi lại vài dòng đó để xác định chính xác nhiễu thực tế (nếu range > 0.02g thường xuyên thì cần nới StableToleranceG, còn nếu range luôn <= 0.02g mà Stable vẫn False thì là bug binding/khác cần đào sâu tiếp)"
   last_session:     "2026-08-14"
   open_questions:
-    - "Cân có hỗ trợ báo cờ ổn định (Stable) qua RS-232C không, hay phải luôn đọc raw liên tục như hiện tại (Stable luôn = false)? Raw data thật thu được chưa thấy cờ ST/US."
+    - "Cân có hỗ trợ báo cờ ổn định (Stable) qua RS-232C không, hay phải luôn đọc raw liên tục như hiện tại? Raw data thật thu được chưa thấy cờ ST/US — đã chuyển sang tự suy luận Stable ở phần mềm (UpdateStability), nhưng chưa xác nhận ngưỡng StableToleranceG=0.02g có phù hợp với nhiễu thực tế của cân hay không."
     - "Scale_Vibra_SJ6200 và Scale_Vibra_HAW30 có cùng bug gán Unit=raw-unit dù WeightValue đã quy đổi KG (giống bug vừa fix ở Shimadzu) — có cần sửa luôn không?"
 ```
 
@@ -235,6 +230,45 @@ Task hiện tại: [mô tả]. File cần làm việc: [list file].
 > Ghi lại **mọi thay đổi đáng kể** theo thứ tự ngược (mới nhất lên đầu).  
 > Format: `[YYYY-MM-DD] [TYPE] [File/Module] — Mô tả`  
 > Types: `FEAT` · `FIX` · `REFACTOR` · `PERF` · `TEST` · `DOCS` · `CHORE` · `BREAK`
+
+---
+
+### [2026-08-14] — Session: Badge "Stable" không lên True dù cân đã đứng yên (chưa xác định được root cause — thêm diagnostic)
+
+```
+[FEAT]     Scale_Shimadzu_TX4202L/ScaleReading.cs          — Thêm LastStabilityInfo (static string debug)
+[FEAT]     ScanAndScale.Core/Drivers/ScaleDriver.cs         — Đọc LastStabilityInfo qua reflection best-effort
+                                                                (StabilityDebugInfo), không phá signature GetWeight
+[FEAT]     WpfSample/ViewModels/MainViewModel.cs            — Log Scale in kèm StabilityDebugInfo
+[DOCS]     CLAUDE.md                                        — Cập nhật active_context
+```
+
+**Triệu chứng:** User xác nhận giá trị cân hiển thị ĐÚNG và real-time (fix session trước đã ổn), nhưng badge
+"False (Stable)" không bao giờ chuyển sang True dù panel "Log Scale" cho thấy cùng một giá trị (vd "69.13g")
+lặp lại liên tục rất nhiều dòng, mỗi ~400ms.
+
+**Phân tích:** Đọc lại toàn bộ logic `UpdateStability()` (StableWindowSize=5, StableToleranceG=0.02g) — về mặt
+thuật toán, nếu 5 lần đọc liên tiếp có cùng giá trị (range=0) thì PHẢI trả về Stable=true trong vòng ~2 giây
+(5 × 400ms). Đã verify build KHÔNG bị stale: rebuild sạch qua MSBuild (exit 0), grep trực tiếp trong
+`WpfSample/bin/Debug/net8.0-windows/ScanAndScale.Core.dll` xác nhận có chứa `UpdateStability`/`LastStabilityInfo`
+(tức DLL đang chạy đã có code mới). Không tìm thấy bug rõ ràng nào trong code hiện tại qua đọc tĩnh — có thể do
+(1) nhiễu raw thực tế giữa các lần đọc lớn hơn 0.02g dù giá trị hiển thị làm tròn giống hệt nhau (2 chữ số thập
+phân đúng bằng độ phân giải d=0.01g của cân nên khó xảy ra, nhưng chưa loại trừ được 100% nếu tolerance quá sát),
+hoặc (2) WpfSample.exe lúc user test là tiến trình CŨ chưa được đóng/mở lại sau lần build gần nhất.
+
+**Fix tạm thời (chưa phải fix cuối — CHỈ thêm khả năng quan sát):** Thêm field debug `LastStabilityInfo` (static
+string) vào `Scale_Shimadzu_TX4202L/ScaleReading.cs`, cập nhật mỗi lần `UpdateStability()` chạy với nội dung
+`"win=x/5 range=...g (tol=0.02g) -> ON DINH/CHUA on dinh"`. `ScaleDriver.cs` đọc field này qua reflection
+`GetField("LastStabilityInfo", Public|Static)` — **tuỳ chọn, best-effort**: nếu model cân khác (DIGI, IND_KG,
+Vibra...) không có field này, `GetField` trả `null` và bị bỏ qua an toàn, không phá vỡ các driver khác — không
+đổi signature cố định của `GetWeight()` mà `ScaleDriver` dùng reflection để gọi cho MỌI model. Kết quả được in
+thêm vào dòng log "Log Scale" trong `MainViewModel.cs`, vd:
+`-> Stable:False [win=5/5 range=0.030g (tol=0.02g) -> CHUA on dinh] -> Tare:False`
+để user xem được CON SỐ THẬT thay vì đoán mò, theo đúng cách đã áp dụng thành công ở các bug trước (đứt gãy giữa
+số, sai đơn vị...).
+
+Rebuild `ScanAndScale.sln` qua MSBuild (Configuration=Debug, `-m:1` để tránh lỗi khoá file tạm thời của VBCSCompiler
+khi build song song) — **sạch (exit 0)**. Chưa test lại với cân thật.
 
 ---
 

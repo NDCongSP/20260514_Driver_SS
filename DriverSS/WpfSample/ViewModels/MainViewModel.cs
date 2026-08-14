@@ -537,8 +537,14 @@ namespace WpfSample.ViewModels
                         // Log kèm RawData để đối chiếu khi driver đọc sai giá trị.
                         // Event chỉ fire khi DataValue thực sự đổi (xem SetDataValue trong
                         // ScaleDriver) nên không spam liên tục dù cân gửi dữ liệu nhanh.
+                        // StabilityDebugInfo (nếu model hỗ trợ, vd. Shimadzu TX4202L) cho
+                        // biết đúng window/range đang tính Stable là bao nhiêu — tránh phải
+                        // đoán mò khi badge Stable không lên.
+                        string stableDebug = string.IsNullOrEmpty(scaleDriver.StabilityDebugInfo)
+                            ? ""
+                            : $" [{scaleDriver.StabilityDebugInfo}]";
                         AppendLog(ref _scaleLog, nameof(ScaleLog),
-                            $"raw='{scaleDriver.RawData}' → {ScaleValue:F3} {ScaleUnit} {Environment.NewLine}-> Stable:{ScaleStable } -> Tare:{ScaleTare}");
+                            $"raw='{scaleDriver.RawData}' → {ScaleValue:F3} {ScaleUnit} {Environment.NewLine}-> Stable:{ScaleStable}{stableDebug} -> Tare:{ScaleTare}");
                     }
                 }
                 else if (newData.DriverStatus == DriverStatus.Disconnected)

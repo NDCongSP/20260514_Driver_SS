@@ -59,6 +59,11 @@ namespace ScanAndScale.Core.Drivers
         private ScaleConfig?            _config;
         private object?                 _scaleModelInstance;
         private MethodInfo?             _getWeightMethod;
+        // Field debug TUY CHON "LastStabilityInfo" (vd. Scale_Shimadzu_TX4202L) - doc
+        // best-effort qua reflection de xem so lieu thuc te driver dung tinh Stable,
+        // KHONG bat buoc phai co - Scale_* khac khong co field nay van hoat dong binh
+        // thuong (FieldInfo = null => bo qua, khong loi).
+        private FieldInfo?              _stabilityDebugField;
         private DataValue               _currentDataValue = new DataValue(DriverStatus.Unknown, null);
 
         private double  _weightKg;
@@ -86,6 +91,8 @@ namespace ScanAndScale.Core.Drivers
         public bool      IsStable     => _isStable;
         public bool      IsTare       => _isTare;
         public string    Unit         => _unit;
+        /// <summary>Thông tin debug (tuỳ chọn) về cách driver model cân tính Stable — rỗng nếu model không hỗ trợ.</summary>
+        public string    StabilityDebugInfo { get; private set; } = "";
 
         // ===================================================
         // EVENT
@@ -193,6 +200,12 @@ namespace ScanAndScale.Core.Drivers
                 }
 
                 _scaleModelInstance = Activator.CreateInstance(scaleType);
+
+                // Optional: field debug "LastStabilityInfo" (static string) - chi vai model
+                // (vd. Shimadzu TX4202L) co field nay de tu suy luan Stable o phia phan mem.
+                _stabilityDebugField = scaleType.GetField("LastStabilityInfo",
+                    BindingFlags.Public | BindingFlags.Static);
+
                 LogInfo($"Load model cân thành công: {_config.ModelName}");
                 return true;
             }
@@ -422,6 +435,9 @@ namespace ScanAndScale.Core.Drivers
                 _isStable = (bool?)parameters[1]   ?? false;
                 _isTare   = (bool?)parameters[2]   ?? false;
                 _unit     = (string?)parameters[3]  ?? "Kg";
+
+                if (_stabilityDebugField != null)
+                    StabilityDebugInfo = (_stabilityDebugField.GetValue(null) as string) ?? "";
             }
             catch (Exception ex)
             {
