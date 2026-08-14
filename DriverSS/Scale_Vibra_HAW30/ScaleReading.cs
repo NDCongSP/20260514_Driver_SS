@@ -77,12 +77,12 @@ namespace Scale_Vibra_HAW30
 
                         //Debug.WriteLine($"ST/US: {stable}, NT/GS: {weightType}, Weight: {weight} {unit}");
                         //Đổi tất cả về đơn vị thống nhất về KG
-                        if (unit.ToUpper() == "KG")
-                            weight = 1 * weight;
-                        else if (unit.ToUpper() == "G")
-                            weight = 0.001 * weight;
-                        else if (unit.ToUpper() == "TON")
-                            weight = 1000 * weight;
+                        //if (unit.ToUpper() == "KG")
+                        //    weight = 1 * weight;
+                        //else if (unit.ToUpper() == "G")
+                        //    weight = 0.001 * weight;
+                        //else if (unit.ToUpper() == "TON")
+                        //    weight = 1000 * weight;
 
                         WeightValue = weight;
                         Stable = stable == "ST";

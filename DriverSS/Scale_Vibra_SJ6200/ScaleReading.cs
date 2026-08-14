@@ -115,15 +115,15 @@ namespace Scale_Vibra_SJ6200
 
                         Debug.WriteLine($"Ổn Định: {stable}, Đơn vị: {ntOrGs}, Weight: {weight}");
 
-                        // Đổi tất cả về đơn vị thống nhất về KG
+                        //// Đổi tất cả về đơn vị thống nhất về KG
 
-                        if (unit.ToUpper() == "KG")
+                        //if (unit.ToUpper() == "KG")
 
-                            weight = 1 * weight;
+                        //    weight = 1 * weight;
 
-                        else if (unit.ToUpper() == "G")
+                        //else if (unit.ToUpper() == "G")
 
-                            weight = 0.001 * weight;
+                        //    weight = 0.001 * weight;
 
                         WeightValue = weight;
 
