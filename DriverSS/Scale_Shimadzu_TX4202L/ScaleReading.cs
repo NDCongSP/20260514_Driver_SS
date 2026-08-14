@@ -30,8 +30,11 @@ namespace Scale_Shimadzu_TX4202L
     {
         public static string oldData = "";
 
-        // So thap phan (+/-), theo sau boi don vi g hoac kg (khong phan biet hoa/thuong)
-        public static string pattern = @"([+-]?\d+(?:\.\d+)?)\s*(kg|g)\b";
+        // So thap phan (+/-), theo sau boi don vi g hoac kg (khong phan biet hoa/thuong).
+        // (?<=^|\s): so PHAI bat dau ngay sau dau cach hoac dau chuoi - chan cac fragment
+        // dang ".44g" (chi con phan thap phan do doc du lieu bi dut giua so tren TCP)
+        // bi hieu nham la mot gia tri hoan chinh rieng (vd. ".44g" -> hieu la 44g/1000).
+        public static string pattern = @"(?:(?<=^)|(?<=\s))([+-]?\d+(?:\.\d+)?)\s*(kg|g)\b";
 
         public static void GetWeight(out double? WeightValue, out bool? Stable, out bool? Tare, out string Unit, string rawData)
         {

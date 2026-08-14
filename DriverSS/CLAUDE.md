@@ -198,8 +198,8 @@ active_context:
     - "ScanAndScale.sln / ScanAndScaleDriver.sln"         # đăng ký project mới
     - "WpfSample/MainWindow.xaml"                         # ComboBox Driver + TextBox IP/Port
     - "WpfSample/ViewModels/MainViewModel.cs"             # BuildScaleConfig(), CanEditScaleConfig
-  blocked_by:       "Đã có raw data thật xác nhận đúng format ('113.40g   113.40g ...'), đã fix bug backlog/unit/TARE badge nhưng CHƯA test lại với cân vật lý thật sau fix"
-  next_step:        "User chạy lại WpfSample (VS: F5) với driver Scale_Shimadzu_TX4202L, IP 192.168.80.237, xác nhận giá trị hiển thị bắt kịp real-time (không còn lệch/trễ) và nhãn đơn vị đúng KG; nếu vẫn sai, xem panel 'Log Scale' (đã log kèm RawData) để đối chiếu tiếp"
+  blocked_by:       "Đã fix root cause đọc đứt gãy giữa số (2 read chạy song song trên cùng socket khi backlog-drain bỏ dở 1 read) — CHƯA test lại lần 2 với cân vật lý thật"
+  next_step:        "User chạy lại WpfSample (VS: F5) với driver Scale_Shimadzu_TX4202L, IP 192.168.80.237, xác nhận giá trị hiển thị KHÔNG còn đứt gãy (không còn kiểu '0.044 KG' sai khi cân thật là 113.xx) và bắt kịp real-time; xem panel 'Log Scale' (log kèm RawData) để đối chiếu nếu còn sai"
   last_session:     "2026-08-14"
   open_questions:
     - "Cân có hỗ trợ báo cờ ổn định (Stable) qua RS-232C không, hay phải luôn đọc raw liên tục như hiện tại (Stable luôn = false)? Raw data thật thu được chưa thấy cờ ST/US."
@@ -278,6 +278,33 @@ nhưng app hiện `0.013 G` kèm badge `TARE` luôn sáng dù không tare.
 
 Đã xoá `obj\` liên quan, restore + build lại `ScanAndScale.sln` qua MSBuild — **build sạch (exit 0)**.
 Chưa test lại với cân vật lý thật sau fix (cần user tự chạy lại và xác nhận giá trị bắt kịp real-time).
+
+**CẬP NHẬT — fix trên CHƯA đủ, tìm ra root cause thật sự:**
+User test lại, log "Log Scale" cho thấy giá trị bị ĐỨT GÃY GIỮA SỐ — vd raw thật là
+`   113.44g` nhưng driver nhận được `.44g` (mất phần nguyên "113"), bị hiểu nhầm thành
+44g/1000 = 0.044 kg. Raw data xen kẽ: thỉnh thoảng đọc đủ ("113.44g"), phần lớn chỉ còn
+phần thập phân (".44g", ".46g"...).
+
+**Root cause thật:** `ReadScaleDataAsync()` tạo `NetworkStream`/`StreamReader` MỚI mỗi tick
+(comment đầu file nói "giữ persistent" nhưng code thực tế lại tạo mới — 2 comment mâu thuẫn
+nhau, khả năng là regression từ lần "fixing bug reconnect scale" trước đây). Bản drain-backlog
+đầu tiên dùng `Task.WhenAny(read, Task.Delay(20))` rồi **bỏ dở** read nếu timeout thắng — nhưng
+read bị bỏ dở đó VẪN chạy ngầm, có thể hoàn tất SAU KHI tick hiện tại đã dispose stream/reader,
+đúng lúc tick KẾ TIẾP tạo `StreamReader` MỚI trên CÙNG 1 socket → **2 lần đọc chạy song song**,
+mỗi bên "cướp" một phần byte của cùng 1 dòng dữ liệu từ kernel socket buffer → đứt gãy giữa số.
+
+**Fix (2 lớp):**
+1. `ScaleDriver.ReadScaleDataAsync()`: bỏ hẳn cơ chế timeout-race-rồi-bỏ-dở. Thay bằng kiểm
+   tra `Socket.Available > 0` (đồng bộ, không I/O) trước khi đọc thêm, và LUÔN `await` trọn
+   vẹn mỗi lần đọc (không bao giờ bỏ dở nữa) — loại bỏ hoàn toàn khả năng 2 read chạy song song.
+2. `Scale_Shimadzu_TX4202L/ScaleReading.cs`: thêm lookbehind `(?:(?<=^)|(?<=\s))` vào đầu
+   pattern — số PHẢI bắt đầu ngay sau khoảng trắng hoặc đầu chuỗi, chặn các fragment kiểu
+   ".44g" bị hiểu nhầm thành giá trị hoàn chỉnh (lớp phòng vệ thêm, phòng trường hợp đứt gãy
+   khác chưa lường hết).
+
+Đã verify regex bằng PowerShell `[regex]::Matches` với cả case đầy đủ lẫn fragment — fragment
+bị reject đúng như kỳ vọng. Rebuild `ScanAndScale.sln` — sạch (exit 0). **Vẫn chưa test lại
+với cân thật sau fix lần 2 này** — cần user xác nhận.
 
 ---
 

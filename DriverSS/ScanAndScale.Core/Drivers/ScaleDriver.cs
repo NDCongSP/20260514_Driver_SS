@@ -374,27 +374,22 @@ namespace ScanAndScale.Core.Drivers
                 // đúng 1 dòng mỗi tick, dữ liệu sẽ tồn đọng trong buffer TCP và NGÀY
                 // CÀNG LỆCH XA thời điểm hiện tại — vì mỗi tick chỉ "rút" được 1 dòng
                 // trong khi cân đã "đẩy" thêm nhiều dòng mới vào buffer.
-                // → Đọc hết các dòng ĐÃ CÓ SẴN trong buffer (không đợi dữ liệu mới),
-                //   chỉ giữ lại dòng CUỐI CÙNG (mới nhất) để parse — đảm bảo giá trị
-                //   hiển thị luôn bắt kịp real-time thay vì hiển thị dữ liệu cũ.
-                // Dùng timeout rất ngắn (20ms): đủ để đọc dữ liệu ĐÃ nằm sẵn trong
-                // buffer (không cần chờ mạng), nhưng dừng ngay khi không còn gì thêm.
-                while (true)
+                // → Đọc hết các dòng ĐÃ CÓ SẴN trong buffer, chỉ giữ lại dòng CUỐI
+                //   CÙNG (mới nhất) để parse — đảm bảo giá trị hiển thị luôn bắt kịp
+                //   real-time thay vì hiển thị dữ liệu cũ.
+                //
+                // FIX (đọc đứt gãy giữa số, vd. "113.44g" → chỉ còn ".44g"):
+                //   Bản đầu dùng Task.WhenAny(read, Task.Delay(20)) rồi "bỏ dở" read
+                //   nếu timeout thắng. Nhưng read bị bỏ dở đó VẪN chạy ngầm và có thể
+                //   hoàn tất SAU KHI tick này đã dispose stream/reader — đúng lúc tick
+                //   KẾ TIẾP tạo StreamReader MỚI trên CÙNG 1 socket → 2 lần đọc chạy
+                //   song song, mỗi bên "cướp" một phần byte của cùng 1 dòng dữ liệu.
+                //   → Dùng Socket.Available (kiểm tra đồng bộ, không I/O) để biết CHẮC
+                //   đã có dữ liệu trong buffer trước khi đọc, và luôn AWAIT trọn vẹn
+                //   (không bao giờ bỏ dở) — không còn 2 read chạy song song.
+                while (_socket!.Available > 0)
                 {
-                    var drainTask    = reader.ReadLineAsync();
-                    var drainTimeout = Task.Delay(20);
-
-                    if (await Task.WhenAny(drainTask, drainTimeout) == drainTimeout)
-                    {
-                        // Không còn dữ liệu tồn đọng — đã bắt kịp real-time.
-                        // drainTask bị bỏ dở khi stream/reader dispose ở cuối method
-                        // → observe exception (nếu có) để tránh UnobservedTaskException.
-                        _ = drainTask.ContinueWith(t => { _ = t.Exception; },
-                                TaskContinuationOptions.OnlyOnFaulted);
-                        break;
-                    }
-
-                    var extra = await drainTask;
+                    var extra = await reader.ReadLineAsync();
                     if (string.IsNullOrEmpty(extra))
                         break; // EOF hoặc dòng rỗng — dừng, giữ RawData hiện tại
 
