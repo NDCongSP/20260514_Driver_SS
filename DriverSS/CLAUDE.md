@@ -188,17 +188,19 @@ const delay = 350; // gán delay bằng 350
 ```yaml
 # Cập nhật phần này MỖI KHI kết thúc session làm việc
 active_context:
-  current_task:     "Đã thêm driver đọc cân điện tử Shimadzu TX4202L (dòng UniBloc, max 4200g) qua TCP/IP"
+  current_task:     "Đã thêm driver cân Shimadzu TX4202L + UI chọn driver/IP trong WpfSample + fix build NETSDK1005"
   related_files:
     - "Scale_Shimadzu_TX4202L/Scale_Shimadzu_TX4202L.csproj"
     - "Scale_Shimadzu_TX4202L/ScaleReading.cs"
     - "ScanAndScale.Core/Models/ScaleConfig.cs"          # ScaleModelNames.Shimadzu_TX4202L
-    - "ScanAndScale.Core/ScanAndScale.Core.csproj"        # ProjectReference + embed target
+    - "ScanAndScale.Core/ScanAndScale.Core.csproj"        # ProjectReference + SetTargetFramework fix
     - "ScanAndScale.Driver/ScanAndScale.Driver.csproj"    # ProjectReference
     - "ScanAndScale.sln / ScanAndScaleDriver.sln"         # đăng ký project mới
+    - "WpfSample/MainWindow.xaml"                         # ComboBox Driver + TextBox IP/Port
+    - "WpfSample/ViewModels/MainViewModel.cs"             # BuildScaleConfig(), CanEditScaleConfig
   blocked_by:       "Chưa test với cân vật lý thật — mẫu raw data lấy từ ảnh chụp Hercules TCP Client (IP 192.168.80.237:23), chưa xác nhận field ổn định (ST/US) có tồn tại hay không"
-  next_step:        "Set ScaleConfig.ModelName = \"Scale_Shimadzu_TX4202L\" + IP thật, chạy TestDriver/WpfSample để xác nhận parser khớp dữ liệu thực tế; nếu cân có gửi cờ ổn định thì bổ sung regex bắt cờ đó"
-  last_session:     "2026-08-13"
+  next_step:        "Chạy WpfSample thật (VS: F5), chọn driver Scale_Shimadzu_TX4202L trên UI mới, nhập IP thật, bấm Kết nối để xác nhận parser khớp dữ liệu thực tế; nếu cân có gửi cờ ổn định thì bổ sung regex bắt cờ đó"
+  last_session:     "2026-08-14"
   open_questions:
     - "Định dạng thô thực tế có luôn kết thúc bằng CR/LF sau mỗi giá trị hay là 1 stream liên tục nhiều giá trị dính nhau (ảnh Hercules cho thấy khả năng thứ 2)?"
     - "Cân có hỗ trợ báo cờ ổn định (Stable) qua RS-232C không, hay phải luôn đọc raw liên tục như hiện tại (Stable luôn = false)?"
@@ -233,6 +235,25 @@ Task hiện tại: [mô tả]. File cần làm việc: [list file].
 > Ghi lại **mọi thay đổi đáng kể** theo thứ tự ngược (mới nhất lên đầu).  
 > Format: `[YYYY-MM-DD] [TYPE] [File/Module] — Mô tả`  
 > Types: `FEAT` · `FIX` · `REFACTOR` · `PERF` · `TEST` · `DOCS` · `CHORE` · `BREAK`
+
+---
+
+### [2026-08-14] — Session: UI chọn driver/IP cân + fix build NETSDK1005
+
+```
+[FEAT]     WpfSample/MainWindow.xaml                — Thêm ComboBox "Driver" + TextBox "IP"/"Port" ở nhóm Cân
+[FEAT]     WpfSample/ViewModels/MainViewModel.cs     — AvailableScaleModels, SelectedScaleModel, ScaleIp, ScalePort,
+                                                         CanEditScaleConfig, BuildScaleConfig()
+[FIX]      ScanAndScale.Core/ScanAndScale.Core.csproj — Thêm SetTargetFramework=netstandard2.0 cho 6 ProjectReference
+                                                         Scale_* → sửa lỗi NETSDK1005 khi build/restore
+[DOCS]     CLAUDE.md                                 — Cập nhật CHANGELOG
+```
+
+**Chi tiết:**
+- GroupBox "⚖️ Cân điện tử" trong WpfSample giờ cho chọn driver (ComboBox đổ từ `ScaleModelNames.All` — driver mới thêm sau này tự xuất hiện) và nhập IP/Port tay, thay vì hard-code `Scale_DIGI` / `192.168.80.237:23` trong XAML. Cả 3 control tự khóa (`CanEditScaleConfig = !IsInitialized`) khi đang kết nối, phải "■ Ngắt kết nối" mới sửa lại được. Giá trị mặc định giữ nguyên `Scale_Vibra_HAW30` / `192.168.80.237` / `23` như cấu hình cũ.
+- **Root cause của lỗi `NETSDK1005`** (chặn cả `dotnet build`/`MSBuild` CLI lẫn WPF Designer báo "Some assembly references are missing"): `ScanAndScale.Core.csproj` multi-target (`net472;net6.0-windows;net8.0-windows`) reference 6 project `Scale_*` (chỉ target `netstandard2.0`) với `ReferenceOutputAssembly=false` + `SkipGetTargetFrameworkProperties=true`. Global property `TargetFramework` của Core (vd. `net8.0-windows`) vẫn bị flow xuống khi NuGet dựng restore graph cho các `Scale_*`, khiến NuGet đòi hỏi `Scale_DIGI\obj\project.assets.json` phải có target `net8.0-windows` — trong khi project đó chỉ restore cho `netstandard2.0`.
+- **Fix:** thêm metadata `<SetTargetFramework>TargetFramework=netstandard2.0</SetTargetFramework>` vào cả 6 `ProjectReference` — ép P2P reference luôn dùng đúng TFM cố định của project con, không kế thừa TargetFramework đang build của Core. Đã xoá `obj\` của 7 project liên quan rồi restore + build lại `ScanAndScale.sln` qua MSBuild — **build sạch (exit 0)** cho cả 3 TFM của Core và `WpfSample.dll`.
+- **Lưu ý:** `dotnet build`/`dotnet restore` (CLI) qua SDK 10.0.201 vẫn có thể lỗi tương tự trên các máy khác nếu global SDK version resolve về bản mới — nếu gặp lại, build qua Visual Studio/MSBuild.exe (đường dẫn: `C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64\MSBuild.exe`) đã xác nhận hoạt động ổn định.
 
 ---
 

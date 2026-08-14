@@ -88,31 +88,37 @@
     <ProjectReference Include="..\Scale_DIGI\Scale_DIGI.csproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <SetTargetFramework>TargetFramework=netstandard2.0</SetTargetFramework>
       <Private>false</Private>
     </ProjectReference>
     <ProjectReference Include="..\Scale_IND_KG\Scale_IND_KG.csproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <SetTargetFramework>TargetFramework=netstandard2.0</SetTargetFramework>
       <Private>false</Private>
     </ProjectReference>
     <ProjectReference Include="..\Scale_SampleReading\Scale_SampleReading.csproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <SetTargetFramework>TargetFramework=netstandard2.0</SetTargetFramework>
       <Private>false</Private>
     </ProjectReference>
     <ProjectReference Include="..\Scale_Vibra_HAW30\Scale_Vibra_HAW30.csproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <SetTargetFramework>TargetFramework=netstandard2.0</SetTargetFramework>
       <Private>false</Private>
     </ProjectReference>
     <ProjectReference Include="..\Scale_Vibra_SJ6200\Scale_Vibra_SJ6200.csproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <SetTargetFramework>TargetFramework=netstandard2.0</SetTargetFramework>
       <Private>false</Private>
     </ProjectReference>
     <ProjectReference Include="..\Scale_Shimadzu_TX4202L\Scale_Shimadzu_TX4202L.csproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <SetTargetFramework>TargetFramework=netstandard2.0</SetTargetFramework>
       <Private>false</Private>
     </ProjectReference>
   </ItemGroup>
