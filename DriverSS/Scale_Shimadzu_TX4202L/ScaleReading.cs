@@ -41,7 +41,7 @@ namespace Scale_Shimadzu_TX4202L
             WeightValue = 0;
             Stable = false; // Format nay khong co co ST/US -> khong xac dinh duoc trang thai on dinh
             Tare = false;
-            Unit = "KG";
+            Unit = "G"; // Don vi mac dinh cua can nay la gram (chua co gia tri hop le nao doc duoc)
 
             bool isTrueFormat = !string.IsNullOrEmpty(rawData) && Regex.IsMatch(rawData, pattern, RegexOptions.IgnoreCase);
 
@@ -65,18 +65,10 @@ namespace Scale_Shimadzu_TX4202L
 
                         double weight = ThisToDouble(weightStr); // Chuyen doi trong luong sang double
 
-                        // Doi tat ca ve don vi thong nhat la KG
-                        if (unit.ToUpper() == "KG")
-                            weight = 1 * weight;
-                        else if (unit.ToUpper() == "G")
-                            weight = 0.001 * weight;
-
-                        // Vong lap ghi de -> ket thuc se la MATCH CUOI CUNG (moi nhat)
+                        // KHONG quy doi don vi - giu nguyen gia tri va don vi raw tu can
+                        // (can Shimadzu TX4202L o day luon gui gram "g", khong tu y ep ve KG).
                         WeightValue = weight;
-                        // QUAN TRONG: WeightValue da duoc quy doi ve KG o tren (dong 66-69),
-                        // nen Unit phai luon la "KG" - KHONG duoc gan lai theo don vi raw (g/kg)
-                        // vi se gay nham lan: so hien thi la KG nhung nhan lai ghi "G".
-                        Unit = "KG";
+                        Unit = unit.ToUpper();
                     }
 
                     oldData = rawData;

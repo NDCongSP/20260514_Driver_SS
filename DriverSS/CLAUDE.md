@@ -306,6 +306,13 @@ mỗi bên "cướp" một phần byte của cùng 1 dòng dữ liệu từ kern
 bị reject đúng như kỳ vọng. Rebuild `ScanAndScale.sln` — sạch (exit 0). **Vẫn chưa test lại
 với cân thật sau fix lần 2 này** — cần user xác nhận.
 
+**CẬP NHẬT — theo yêu cầu user:** bỏ hẳn phần ép quy đổi sang KG trong
+`Scale_Shimadzu_TX4202L/ScaleReading.cs` — giờ `WeightValue`/`Unit` giữ NGUYÊN giá trị và đơn vị
+raw đọc được từ cân (vd. cân gửi gram thì hiển thị đúng gram, không tự nhân 0.001 để quy về KG
+như các driver Vibra_SJ6200/Vibra_HAW30 khác). `MainViewModel`/`ScaleDisplayText` vốn đã tổng
+quát (chỉ ghép `{ScaleValue} {ScaleUnit}` bất kể đơn vị gì) nên không cần sửa gì ở WPF. Build lại
+— sạch (exit 0).
+
 ---
 
 ### [2026-08-14] — Session: UI chọn driver/IP cân + fix build NETSDK1005
