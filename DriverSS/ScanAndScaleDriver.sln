@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.1.11312.151 d18.0
+VisualStudioVersion = 18.1.11312.151
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Scale_DIGI", "Scale_DIGI\Scale_DIGI.csproj", "{A666C8FD-A696-4DD0-A13F-C8F75B6DD0BD}"
 EndProject
@@ -22,6 +22,8 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Scale", "Scale", "{D43C3321-AA40-4664-BF8B-5D262150B553}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScanAndScale.Helper", "ScanAndScale.Helper\ScanAndScale.Helper.csproj", "{8F1E7BC1-C46C-4C88-8BBB-ACDD1304969B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WpfSample", "WpfSample\WpfSample.csproj", "{DDFADFFA-64EB-5AF5-8C70-A6680F264FFB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -65,6 +67,10 @@ Global
 		{8F1E7BC1-C46C-4C88-8BBB-ACDD1304969B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8F1E7BC1-C46C-4C88-8BBB-ACDD1304969B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8F1E7BC1-C46C-4C88-8BBB-ACDD1304969B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DDFADFFA-64EB-5AF5-8C70-A6680F264FFB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DDFADFFA-64EB-5AF5-8C70-A6680F264FFB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DDFADFFA-64EB-5AF5-8C70-A6680F264FFB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DDFADFFA-64EB-5AF5-8C70-A6680F264FFB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

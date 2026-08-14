@@ -538,7 +538,7 @@ namespace WpfSample.ViewModels
                         // Event chỉ fire khi DataValue thực sự đổi (xem SetDataValue trong
                         // ScaleDriver) nên không spam liên tục dù cân gửi dữ liệu nhanh.
                         AppendLog(ref _scaleLog, nameof(ScaleLog),
-                            $"raw='{scaleDriver.RawData}' → {ScaleValue:F3} {ScaleUnit}");
+                            $"raw='{scaleDriver.RawData}' → {ScaleValue:F3} {ScaleUnit} {Environment.NewLine}-> Stable:{ScaleStable } -> Tare:{ScaleTare}");
                     }
                 }
                 else if (newData.DriverStatus == DriverStatus.Disconnected)
