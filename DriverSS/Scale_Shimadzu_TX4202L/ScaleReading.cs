@@ -70,7 +70,10 @@ namespace Scale_Shimadzu_TX4202L
 
                         // Vong lap ghi de -> ket thuc se la MATCH CUOI CUNG (moi nhat)
                         WeightValue = weight;
-                        Unit = unit.ToUpper();
+                        // QUAN TRONG: WeightValue da duoc quy doi ve KG o tren (dong 66-69),
+                        // nen Unit phai luon la "KG" - KHONG duoc gan lai theo don vi raw (g/kg)
+                        // vi se gay nham lan: so hien thi la KG nhung nhan lai ghi "G".
+                        Unit = "KG";
                     }
 
                     oldData = rawData;

@@ -368,6 +368,39 @@ namespace ScanAndScale.Core.Drivers
                     return;
                 }
 
+                // ── DRAIN BACKLOG (FIX: giá trị hiển thị bị "trễ" so với cân thật) ──
+                // Một số cân (vd. Shimadzu TX4202L ở chế độ auto-print) gửi dữ liệu
+                // liên tục NHANH HƠN chu kỳ đọc TimeScanMs (vd. 400ms). Nếu chỉ đọc
+                // đúng 1 dòng mỗi tick, dữ liệu sẽ tồn đọng trong buffer TCP và NGÀY
+                // CÀNG LỆCH XA thời điểm hiện tại — vì mỗi tick chỉ "rút" được 1 dòng
+                // trong khi cân đã "đẩy" thêm nhiều dòng mới vào buffer.
+                // → Đọc hết các dòng ĐÃ CÓ SẴN trong buffer (không đợi dữ liệu mới),
+                //   chỉ giữ lại dòng CUỐI CÙNG (mới nhất) để parse — đảm bảo giá trị
+                //   hiển thị luôn bắt kịp real-time thay vì hiển thị dữ liệu cũ.
+                // Dùng timeout rất ngắn (20ms): đủ để đọc dữ liệu ĐÃ nằm sẵn trong
+                // buffer (không cần chờ mạng), nhưng dừng ngay khi không còn gì thêm.
+                while (true)
+                {
+                    var drainTask    = reader.ReadLineAsync();
+                    var drainTimeout = Task.Delay(20);
+
+                    if (await Task.WhenAny(drainTask, drainTimeout) == drainTimeout)
+                    {
+                        // Không còn dữ liệu tồn đọng — đã bắt kịp real-time.
+                        // drainTask bị bỏ dở khi stream/reader dispose ở cuối method
+                        // → observe exception (nếu có) để tránh UnobservedTaskException.
+                        _ = drainTask.ContinueWith(t => { _ = t.Exception; },
+                                TaskContinuationOptions.OnlyOnFaulted);
+                        break;
+                    }
+
+                    var extra = await drainTask;
+                    if (string.IsNullOrEmpty(extra))
+                        break; // EOF hoặc dòng rỗng — dừng, giữ RawData hiện tại
+
+                    RawData = extra; // Ghi đè bằng dòng mới hơn — luôn giữ bản mới nhất
+                }
+
                 ParseScaleData(RawData);
                 LogInfo($"[Read OK] {_weightKg:F3} {_unit} (raw: '{RawData.Trim()}')");
                 SetDataValue(new DataValue(DriverStatus.Connected, _weightKg));

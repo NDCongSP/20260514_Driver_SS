@@ -198,12 +198,12 @@ active_context:
     - "ScanAndScale.sln / ScanAndScaleDriver.sln"         # đăng ký project mới
     - "WpfSample/MainWindow.xaml"                         # ComboBox Driver + TextBox IP/Port
     - "WpfSample/ViewModels/MainViewModel.cs"             # BuildScaleConfig(), CanEditScaleConfig
-  blocked_by:       "Chưa test với cân vật lý thật — mẫu raw data lấy từ ảnh chụp Hercules TCP Client (IP 192.168.80.237:23), chưa xác nhận field ổn định (ST/US) có tồn tại hay không"
-  next_step:        "Chạy WpfSample thật (VS: F5), chọn driver Scale_Shimadzu_TX4202L trên UI mới, nhập IP thật, bấm Kết nối để xác nhận parser khớp dữ liệu thực tế; nếu cân có gửi cờ ổn định thì bổ sung regex bắt cờ đó"
+  blocked_by:       "Đã có raw data thật xác nhận đúng format ('113.40g   113.40g ...'), đã fix bug backlog/unit/TARE badge nhưng CHƯA test lại với cân vật lý thật sau fix"
+  next_step:        "User chạy lại WpfSample (VS: F5) với driver Scale_Shimadzu_TX4202L, IP 192.168.80.237, xác nhận giá trị hiển thị bắt kịp real-time (không còn lệch/trễ) và nhãn đơn vị đúng KG; nếu vẫn sai, xem panel 'Log Scale' (đã log kèm RawData) để đối chiếu tiếp"
   last_session:     "2026-08-14"
   open_questions:
-    - "Định dạng thô thực tế có luôn kết thúc bằng CR/LF sau mỗi giá trị hay là 1 stream liên tục nhiều giá trị dính nhau (ảnh Hercules cho thấy khả năng thứ 2)?"
-    - "Cân có hỗ trợ báo cờ ổn định (Stable) qua RS-232C không, hay phải luôn đọc raw liên tục như hiện tại (Stable luôn = false)?"
+    - "Cân có hỗ trợ báo cờ ổn định (Stable) qua RS-232C không, hay phải luôn đọc raw liên tục như hiện tại (Stable luôn = false)? Raw data thật thu được chưa thấy cờ ST/US."
+    - "Scale_Vibra_SJ6200 và Scale_Vibra_HAW30 có cùng bug gán Unit=raw-unit dù WeightValue đã quy đổi KG (giống bug vừa fix ở Shimadzu) — có cần sửa luôn không?"
 ```
 
 ### 4.2 Quyết định đã chốt (Decision Log)
@@ -235,6 +235,49 @@ Task hiện tại: [mô tả]. File cần làm việc: [list file].
 > Ghi lại **mọi thay đổi đáng kể** theo thứ tự ngược (mới nhất lên đầu).  
 > Format: `[YYYY-MM-DD] [TYPE] [File/Module] — Mô tả`  
 > Types: `FEAT` · `FIX` · `REFACTOR` · `PERF` · `TEST` · `DOCS` · `CHORE` · `BREAK`
+
+---
+
+### [2026-08-14] — Session: Fix cân báo sai giá trị (hiển thị trễ so với cân thật)
+
+```
+[FIX]      ScanAndScale.Core/Drivers/ScaleDriver.cs       — Drain backlog TCP, luôn parse dòng MỚI NHẤT
+[FIX]      Scale_Shimadzu_TX4202L/ScaleReading.cs          — Unit luôn = "KG" (trước đó ghi nhầm "G")
+[FIX]      WpfSample/Converters/DriverStatusConverter.cs   — Thêm TareToVisibilityConverter (đúng chiều)
+[FIX]      WpfSample/MainWindow.xaml                       — Badge TARE dùng converter đúng chiều
+[FEAT]     WpfSample/ViewModels/MainViewModel.cs            — Log kèm RawData trong Log Scale để debug
+```
+
+**Triệu chứng:** User kết nối cân Shimadzu TX4202L thật (IP 192.168.80.237), cân vật lý hiện `111.40`
+nhưng app hiện `0.013 G` kèm badge `TARE` luôn sáng dù không tare.
+
+**Root cause (đã xác nhận bằng raw data thật từ Hercules — `113.40g   113.40g   113.39g ...`,
+đúng định dạng parser mong đợi, nên KHÔNG phải lỗi regex/format):**
+1. **Chính:** Shimadzu ở chế độ auto-print gửi dữ liệu liên tục NHANH HƠN chu kỳ đọc
+   `TimeScanMs` (400ms). `ReadScaleDataAsync()` cũ chỉ đọc đúng 1 dòng/tick → dữ liệu tồn đọng
+   trong buffer TCP và NGÀY CÀNG LỆCH XA thời điểm hiện tại (driver không bao giờ đuổi kịp),
+   nên hiển thị mãi giá trị cũ (gần 0, từ lúc chưa đặt vật lên cân).
+2. **Phụ:** `Scale_Shimadzu_TX4202L/ScaleReading.cs` gán `Unit = unit.ToUpper()` (đơn vị RAW,
+   "G") dù `WeightValue` đã quy đổi sang KG ở bước trước đó → hiển thị sai nhãn (số là KG
+   nhưng ghi "G"). Bug này copy từ `Scale_Vibra_SJ6200`/`Scale_Vibra_HAW30` (cùng pattern lỗi,
+   chưa sửa ở 2 file đó vì ngoài phạm vi yêu cầu lần này).
+3. **Phụ:** `MainWindow.xaml` bind badge "TARE" với `InverseBoolToVisibilityConverter`
+   (dùng nhầm converter đảo ngược) → badge hiện khi **KHÔNG** tare, ẩn khi **đang** tare.
+   Bug có sẵn từ trước, không riêng driver Shimadzu.
+
+**Fix:**
+1. `ScaleDriver.ReadScaleDataAsync()`: sau khi đọc dòng đầu tiên, drain hết các dòng ĐÃ CÓ SẴN
+   trong buffer (timeout 20ms/lần — không đợi dữ liệu mới), chỉ giữ dòng CUỐI CÙNG để parse.
+   Áp dụng chung cho MỌI driver cân (không riêng Shimadzu) — an toàn tuyệt đối vì luôn ưu tiên
+   dữ liệu mới nhất, không có tác dụng phụ với cân gửi chậm hơn `TimeScanMs`.
+2. `Scale_Shimadzu_TX4202L`: `Unit = "KG"` cố định.
+3. Thêm `TareToVisibilityConverter` (true→Visible, false→Collapsed) đúng chiều, thay
+   `InvBoolToVis` trên badge TARE.
+4. `MainViewModel.OnScaleDataChanged`: log `raw='...' → {value} {unit}` vào panel "Log Scale"
+   mỗi khi giá trị đổi — để đối chiếu ngay trên UI nếu còn sai lệch, không cần hỏi lại raw data.
+
+Đã xoá `obj\` liên quan, restore + build lại `ScanAndScale.sln` qua MSBuild — **build sạch (exit 0)**.
+Chưa test lại với cân vật lý thật sau fix (cần user tự chạy lại và xác nhận giá trị bắt kịp real-time).
 
 ---
 

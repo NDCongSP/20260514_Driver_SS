@@ -533,10 +533,13 @@ namespace WpfSample.ViewModels
                         ScaleUnit = scaleDriver.Unit;
                         ScaleStable = scaleDriver.IsStable;
                         ScaleTare = scaleDriver.IsTare;
-                    }
 
-                    // Chỉ log khi có giá trị (không log 0 liên tục để tránh spam)
-                    // AppendLog(ref _scaleLog, nameof(ScaleLog), $"Cân: {ScaleValue:F3} {ScaleUnit}");
+                        // Log kèm RawData để đối chiếu khi driver đọc sai giá trị.
+                        // Event chỉ fire khi DataValue thực sự đổi (xem SetDataValue trong
+                        // ScaleDriver) nên không spam liên tục dù cân gửi dữ liệu nhanh.
+                        AppendLog(ref _scaleLog, nameof(ScaleLog),
+                            $"raw='{scaleDriver.RawData}' → {ScaleValue:F3} {ScaleUnit}");
+                    }
                 }
                 else if (newData.DriverStatus == DriverStatus.Disconnected)
                 {

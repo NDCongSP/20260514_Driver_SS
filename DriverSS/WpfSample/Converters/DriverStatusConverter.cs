@@ -129,6 +129,28 @@ namespace WpfSample.Converters
     }
 
     // ============================================================
+    // CONVERTER 5b: bool (Tare) → Visibility
+    // ============================================================
+
+    /// <summary>
+    /// Chuyển trạng thái Tare (bool) thành Visibility cho badge "TARE".
+    /// true (đang Tare) → Visible; false → Collapsed.
+    /// </summary>
+    [ValueConversion(typeof(bool), typeof(Visibility))]
+    public class TareToVisibilityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is bool isTare)
+                return isTare ? Visibility.Visible : Visibility.Collapsed;
+            return Visibility.Collapsed;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotImplementedException();
+    }
+
+    // ============================================================
     // CONVERTER 5: InverseBool → Visibility
     // ============================================================
 
