@@ -313,6 +313,20 @@ như các driver Vibra_SJ6200/Vibra_HAW30 khác). `MainViewModel`/`ScaleDisplayT
 quát (chỉ ghép `{ScaleValue} {ScaleUnit}` bất kể đơn vị gì) nên không cần sửa gì ở WPF. Build lại
 — sạch (exit 0).
 
+**CẬP NHẬT — badge "False (Stable)" không lên dù màn hình LCD cân đã báo ổn định (mũi tên
+sáng):** Root cause: format continuous-output hiện tại của máy KHÔNG gửi cờ ST/US qua RS232 —
+mũi tên ổn định trên LCD là do CHÍNH CÂN tự tính nội bộ (bộ lọc riêng), không phát ra ngoài
+serial. Raw data thật vẫn dao động nhẹ (66.26-66.28g) ngay cả khi LCD đã khoá 66.29g ổn định.
+`Stable` bị hard-code `false` từ đầu vì "không có cờ để đọc".
+
+**Fix:** `Scale_Shimadzu_TX4202L/ScaleReading.cs` tự suy luận Stable ở phía phần mềm — theo dõi
+`StableWindowSize=5` giá trị đọc gần nhất trong `Queue<double>` static, coi là ổn định nếu biên
+độ (max-min) của cửa sổ đó ≤ `StableToleranceG=0.02` (~2 lần độ phân giải d=0.01g in trên máy).
+Lưu ý: state này static (giống `oldData`) — chỉ đúng khi có DUY NHẤT 1 cân Shimadzu TX4202L
+kết nối cùng lúc trong 1 process (giới hạn có sẵn từ trước, không phải vấn đề mới).
+Build lại — sạch (exit 0). Chưa test lại với cân thật (cần user xác nhận badge Stable lên đúng
+khi giá trị đã ổn định thực tế trên LCD).
+
 ---
 
 ### [2026-08-14] — Session: UI chọn driver/IP cân + fix build NETSDK1005

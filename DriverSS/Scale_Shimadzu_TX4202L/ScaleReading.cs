@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -20,7 +21,8 @@ namespace Scale_Shimadzu_TX4202L
     /// => Moi gia tri la mot so thap phan (co the co dau +/-), theo sau ngay boi
     ///    don vi "g" (hoac "kg" voi cau hinh khac), nhieu gia tri co the dinh lien
     ///    nhau trong cung mot lan doc, cach nhau boi khoang trang hoac dau "-".
-    ///    Format nay KHONG co co ST/US bao trang thai on dinh (khac Vibra HAW30/SJ6200).
+    ///    Format nay KHONG co co ST/US bao trang thai on dinh qua RS232 (khac Vibra
+    ///    HAW30/SJ6200) - Stable duoc driver TU SUY LUAN o phia phan mem, xem UpdateStability().
     ///
     /// Chien luoc parse: quet toan bo rawData bang regex, lay MATCH CUOI CUNG
     /// (gia tri moi nhat trong goi du lieu vua doc duoc) lam ket qua hien tai —
@@ -36,10 +38,43 @@ namespace Scale_Shimadzu_TX4202L
         // bi hieu nham la mot gia tri hoan chinh rieng (vd. ".44g" -> hieu la 44g/1000).
         public static string pattern = @"(?:(?<=^)|(?<=\s))([+-]?\d+(?:\.\d+)?)\s*(kg|g)\b";
 
+        // ─── Suy luan trang thai on dinh (Stable) o phia phan mem ──────────────
+        // Format continuous-output hien tai cua may KHONG gui co ST/US qua RS232
+        // (khac Vibra HAW30/SJ6200) - mui ten on dinh tren man hinh LCD la do
+        // CHINH CAN tu tinh toan noi bo (bo loc rieng cua no), khong duoc phat ra
+        // ngoai serial. Du lieu raw van dao dong nho (vd 66.26-66.28g) ke ca khi
+        // LCD da bao on dinh (66.29g).
+        // => Driver tu suy ra on dinh bang cach theo doi StableWindowSize gia tri
+        //    doc gan nhat: neu bien do (max-min) trong cua so do <= StableToleranceG
+        //    (~2 lan do phan giai d=0.01g in tren may) thi coi la on dinh.
+        // Luu y: _recentWeights la static (giong oldData o tren) - chi dung dung
+        // khi co DUY NHAT 1 can Shimadzu TX4202L ket noi cung luc trong 1 process.
+        private const int    StableWindowSize = 5;    // So gia tri gan nhat can xem xet
+        private const double StableToleranceG = 0.02; // Bien do toi da (gram) de coi la on dinh
+        private static readonly Queue<double> _recentWeights = new Queue<double>();
+
+        private static bool UpdateStability(double weight)
+        {
+            _recentWeights.Enqueue(weight);
+            while (_recentWeights.Count > StableWindowSize)
+                _recentWeights.Dequeue();
+
+            if (_recentWeights.Count < StableWindowSize)
+                return false; // Chua du du lieu trong cua so - chua the ket luan
+
+            double min = double.MaxValue, max = double.MinValue;
+            foreach (var w in _recentWeights)
+            {
+                if (w < min) min = w;
+                if (w > max) max = w;
+            }
+            return (max - min) <= StableToleranceG;
+        }
+
         public static void GetWeight(out double? WeightValue, out bool? Stable, out bool? Tare, out string Unit, string rawData)
         {
             WeightValue = 0;
-            Stable = false; // Format nay khong co co ST/US -> khong xac dinh duoc trang thai on dinh
+            Stable = false; // Mac dinh - se duoc tinh lai qua UpdateStability() neu parse thanh cong
             Tare = false;
             Unit = "G"; // Don vi mac dinh cua can nay la gram (chua co gia tri hop le nao doc duoc)
 
@@ -69,6 +104,7 @@ namespace Scale_Shimadzu_TX4202L
                         // (can Shimadzu TX4202L o day luon gui gram "g", khong tu y ep ve KG).
                         WeightValue = weight;
                         Unit = unit.ToUpper();
+                        Stable = UpdateStability(weight);
                     }
 
                     oldData = rawData;
