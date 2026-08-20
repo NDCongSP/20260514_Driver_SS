@@ -20,7 +20,16 @@
     <AssemblyName>Scale_Vibra_HAW30</AssemblyName>
     <RootNamespace>Scale_Vibra_HAW30</RootNamespace>
     <Description>Parser can Vibra HAW-30</Description>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
+    <NugetUrl>http://10.40.10.4:5860/v3/index.json</NugetUrl>
+    <NugetKey>11EA37E236F449A3A10B188194A5C111</NugetKey>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PushToNuget>true</PushToNuget>
   </PropertyGroup>
 
+  <Target Name="CopyNupkgLocal" Condition="$(PushToNuget) == 'true' And $(GeneratePackageOnBuild) == 'true'" AfterTargets="Pack">
+    <!-- Publish nuget package -->
+    <Message Importance="high" Text="dotnet nuget push -s $(NugetUrl) bin\Debug\$(MSBuildProjectName).$(Version).nupkg -k $(NugetKey)"></Message>
+    <Exec Command="dotnet nuget push -s $(NugetUrl) bin\Debug\$(MSBuildProjectName).$(Version).nupkg -k $(NugetKey)" ContinueOnError="true" />
+  </Target>
 </Project>
