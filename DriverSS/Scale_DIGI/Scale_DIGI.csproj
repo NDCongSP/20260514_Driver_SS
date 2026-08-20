@@ -26,7 +26,7 @@
     <NugetUrl>http://10.40.10.4:5860/v3/index.json</NugetUrl>
     <NugetKey>11EA37E236F449A3A10B188194A5C111</NugetKey>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PushToNuget>true</PushToNuget>
+    <PushToNuget>false</PushToNuget>
   </PropertyGroup>
 
   <Target Name="CopyNupkgLocal" Condition="$(PushToNuget) == 'true' And $(GeneratePackageOnBuild) == 'true'" AfterTargets="Pack">

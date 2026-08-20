@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScanAndScale.Helper", "Scan
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WpfSample", "WpfSample\WpfSample.csproj", "{DDFADFFA-64EB-5AF5-8C70-A6680F264FFB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScaleSimulator", "ScaleSimulator\ScaleSimulator.csproj", "{98E0E252-2B03-433B-A00C-73FC5B6F4986}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -71,6 +73,10 @@ Global
 		{DDFADFFA-64EB-5AF5-8C70-A6680F264FFB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DDFADFFA-64EB-5AF5-8C70-A6680F264FFB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DDFADFFA-64EB-5AF5-8C70-A6680F264FFB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{98E0E252-2B03-433B-A00C-73FC5B6F4986}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{98E0E252-2B03-433B-A00C-73FC5B6F4986}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{98E0E252-2B03-433B-A00C-73FC5B6F4986}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{98E0E252-2B03-433B-A00C-73FC5B6F4986}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

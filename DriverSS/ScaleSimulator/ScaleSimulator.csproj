@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ============================================================
+    ScaleSimulator — Mô phỏng cân điện tử qua TCP và qua RS232 (COM)
+    để test ScanAndScale.Core/Drivers/ScaleDriver.cs mà không cần cân thật.
+
+    CỐ Ý KHÔNG ProjectReference tới ScanAndScale.Core/Scale_* — đứng độc lập
+    hoàn toàn (chỉ dùng string literal cho tên model, xem ScaleFormats/).
+    Lý do: ScanAndScale.Core.csproj bật GeneratePackageOnBuild=true và kéo
+    theo build lồng 6 project Scale_* mỗi lần build (xem CLAUDE.md CHANGELOG
+    [2026-08-20]) — build rất chậm nếu server NuGet nội bộ không reachable.
+    Simulator chỉ cần build nhanh, độc lập, để chạy song song lúc debug driver.
+    ============================================================
+  -->
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyTitle>Scale Simulator (TCP/RS232)</AssemblyTitle>
+    <RootNamespace>ScaleSimulator</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Windows Desktop shared framework không tự kèm System.IO.Ports — cần khai báo
+         tường minh (đúng version đang dùng ở ScanAndScale.Core.csproj). -->
+    <PackageReference Include="System.IO.Ports" Version="9.0.2" />
+  </ItemGroup>
+
+</Project>

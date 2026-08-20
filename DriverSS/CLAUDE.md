@@ -188,15 +188,16 @@ const delay = 350; // gán delay bằng 350
 ```yaml
 # Cập nhật phần này MỖI KHI kết thúc session làm việc
 active_context:
-  current_task:     "Thêm kết nối trực tiếp qua cổng COM (RS232/USB-to-Serial) cho Scale Driver, song song với TCP/IP hiện có (qua bộ chuyển đổi RS232-to-TCP) — cấu hình được ConnectionType (Tcp/Com) lúc khởi tạo. Đã implement Ở TẦNG DÙNG CHUNG (ScaleDriver.cs/ScaleConfig.cs) nên áp dụng cho MỌI model cân cùng lúc (không cần sửa riêng từng Scale_*), theo đúng yêu cầu 'test Vibra_HAW30 trước, OK thì triển khai hàng loạt' — vì kiến trúc vốn đã dùng chung 1 driver cho tất cả model (model cân chỉ là DLL parser nạp qua reflection, không biết TCP hay COM). Build sạch (exit 0) qua MSBuild, nhưng CHƯA test với cân thật qua COM — user chưa xác nhận."
+  current_task:     "Thêm kết nối trực tiếp qua cổng COM (RS232/USB-to-Serial) cho Scale Driver, song song với TCP/IP hiện có (qua bộ chuyển đổi RS232-to-TCP) — cấu hình được ConnectionType (Tcp/Com) lúc khởi tạo. Đã implement Ở TẦNG DÙNG CHUNG (ScaleDriver.cs/ScaleConfig.cs) nên áp dụng cho MỌI model cân cùng lúc (không cần sửa riêng từng Scale_*), theo đúng yêu cầu 'test Vibra_HAW30 trước, OK thì triển khai hàng loạt' — vì kiến trúc vốn đã dùng chung 1 driver cho tất cả model (model cân chỉ là DLL parser nạp qua reflection, không biết TCP hay COM). Build sạch (exit 0) qua MSBuild, nhưng CHƯA test với cân thật qua COM — user chưa xác nhận. Session sau đó (cùng ngày): thêm project ScaleSimulator (WinForms, độc lập) mô phỏng cân qua TCP VÀ qua COM để user có thể tự test luồng đọc dữ liệu/auto-reconnect/Stable-detection MÀ KHÔNG CẦN cân thật, trong lúc chờ có cân Vibra_HAW30 vật lý — xem ScaleSimulator/README.md."
   related_files:
     - "ScanAndScale.Core/Models/ScaleConfig.cs"           # ScaleConnectionType enum (Tcp/Com) + ConnectionType/ComPort/BaudRate
     - "ScanAndScale.Core/Drivers/ScaleDriver.cs"          # Connect/Read/Reconnect dispatcher theo ConnectionType; nhánh Com dùng SerialPort.BaseStream + StreamReader (leaveOpen), cùng chiến lược drain-backlog như nhánh Tcp (BytesToRead thay Socket.Available)
     - "WpfSample/ViewModels/MainViewModel.cs"             # ScaleConnectionType/ScaleComPort/ScaleBaudRate + IsScaleTcp/IsScaleCom, BuildScaleConfig() truyền qua
     - "WpfSample/MainWindow.xaml"                         # ComboBox "Kết nối" (Tcp/Com) + panel COM/Baud ẩn/hiện qua BooleanToVisibilityConverter
     - "ScanAndScale.Core/ScanAndScale.Core.csproj"        # (không liên quan COM) Fix NU1012 khi Pack — đổi TargetFrameworks bare net6.0-windows/net8.0-windows → net6.0-windows7.0/net8.0-windows7.0 (khớp pattern ScanAndScale.Driver/TestDriver/WinFormsApp1 đã dùng sẵn), phải xoá obj/ + Restore lại sau khi đổi TFM
-  blocked_by:       "Chưa có cân Vibra_HAW30 thật cắm qua COM để test end-to-end (mở port, đọc dữ liệu, auto-reconnect khi rút cáp). Code compile sạch nhưng logic SerialPort.BaseStream + StreamReader.ReadLineAsync (đặc biệt phần drain-backlog dùng BytesToRead) mới chỉ verify tĩnh, chưa chạy với cân thật."
-  next_step:        "User: mở WpfSample, ComboBox 'Driver'=Scale_Vibra_HAW30 (mặc định), đổi ComboBox 'Kết nối' sang COM, nhập đúng ComPort (vd COM3, xem Device Manager) + Baud rate (thường 9600 — xem tài liệu cân), bấm 'Kết nối tất cả', xác nhận: (1) badge trạng thái lên Connected, (2) giá trị cân hiển thị đúng + real-time trong Log Scale, (3) rút cáp COM thử auto-reconnect có hoạt động không. Nếu OK → không cần sửa gì thêm ở tầng driver (đã dùng chung), chỉ cần các Scale_* khác test tương tự bằng cách đổi ComboBox 'Driver' sang model tương ứng."
+    - "ScaleSimulator/"                                   # (project mới, độc lập) Mô phỏng cân qua TCP server + COM writer, build sẵn 5 format raw data khớp đúng regex từng Scale_*/ScaleReading.cs — xem CHANGELOG bên dưới và ScaleSimulator/README.md
+  blocked_by:       "Chưa có cân Vibra_HAW30 thật cắm qua COM để test end-to-end (mở port, đọc dữ liệu, auto-reconnect khi rút cáp). Code compile sạch nhưng logic SerialPort.BaseStream + StreamReader.ReadLineAsync (đặc biệt phần drain-backlog dùng BytesToRead) mới chỉ verify tĩnh, chưa chạy với cân thật. ScaleSimulator giúp test được luồng đọc/parse/reconnect NHƯNG KHÔNG thay thế hoàn toàn việc test với cân vật lý thật (không mô phỏng được đặc tính điện/nhiễu RS232 thật, hay hành vi baud/parity thật của thiết bị)."
+  next_step:        "User: mở WpfSample, ComboBox 'Driver'=Scale_Vibra_HAW30 (mặc định), đổi ComboBox 'Kết nối' sang COM, nhập đúng ComPort (vd COM3, xem Device Manager) + Baud rate (thường 9600 — xem tài liệu cân), bấm 'Kết nối tất cả', xác nhận: (1) badge trạng thái lên Connected, (2) giá trị cân hiển thị đúng + real-time trong Log Scale, (3) rút cáp COM thử auto-reconnect có hoạt động không. Nếu OK → không cần sửa gì thêm ở tầng driver (đã dùng chung), chỉ cần các Scale_* khác test tương tự bằng cách đổi ComboBox 'Driver' sang model tương ứng. Trong lúc chưa có cân thật: có thể dùng ScaleSimulator (cài com0com để có cặp COM ảo, hoặc dùng nhánh TCP không cần phần cứng gì) để test trước luồng driver/UI."
   last_session:     "2026-08-20"
   open_questions:
     - "Cân có hỗ trợ báo cờ ổn định (Stable) qua RS-232C không, hay phải luôn đọc raw liên tục như hiện tại? Raw data thật thu được chưa thấy cờ ST/US — đã chuyển sang tự suy luận Stable ở phần mềm (UpdateStability), nhưng chưa xác nhận ngưỡng StableToleranceG=0.02g có phù hợp với nhiễu thực tế của cân hay không."
@@ -233,6 +234,103 @@ Task hiện tại: [mô tả]. File cần làm việc: [list file].
 > Ghi lại **mọi thay đổi đáng kể** theo thứ tự ngược (mới nhất lên đầu).  
 > Format: `[YYYY-MM-DD] [TYPE] [File/Module] — Mô tả`  
 > Types: `FEAT` · `FIX` · `REFACTOR` · `PERF` · `TEST` · `DOCS` · `CHORE` · `BREAK`
+
+---
+
+### [2026-08-20] — Session: Thêm ScaleSimulator — mô phỏng cân qua TCP & RS232 để test không cần cân thật
+
+```
+[FEAT]     ScaleSimulator/ScaleSimulator.csproj                — Project WinForms mới (net8.0-windows7.0), ĐỘC LẬP
+                                                                    (không ProjectReference ScanAndScale.Core/Scale_*)
+[FEAT]     ScaleSimulator/ScaleFormats/ScaleFormatDefinition.cs — 5 format raw data (DIGI, IND_KG, Vibra_SJ6200,
+                                                                    Vibra_HAW30, Shimadzu_TX4202L) — build khớp ĐÚNG
+                                                                    regex/điều kiện parse thật trong từng
+                                                                    Scale_*/ScaleReading.cs (đối chiếu trực tiếp
+                                                                    source, không đoán mò)
+[FEAT]     ScaleSimulator/ScaleSimEngine.cs                     — Timer nền sinh dòng raw data theo chu kỳ, cộng
+                                                                    nhiễu ngẫu nhiên quanh giá trị target
+[FEAT]     ScaleSimulator/Servers/TcpScaleServer.cs             — TCP server, broadcast dữ liệu tới mọi client —
+                                                                    giả lập bộ chuyển đổi Serial-to-Ethernet
+[FEAT]     ScaleSimulator/Servers/SerialScaleServer.cs          — Ghi dữ liệu ra 1 đầu cổng COM (Parity/DataBits/
+                                                                    StopBits None/8/One — khớp ScaleDriver thật)
+[FEAT]     ScaleSimulator/MainForm.cs                           — UI: chọn model/giá trị/nhiễu/cờ trạng thái, bật/tắt
+                                                                    TCP server + COM writer độc lập, nút mô phỏng
+                                                                    "đặt vật lên cân" (ramp → ổn định), log
+[DOCS]     ScaleSimulator/README.md                             — Hướng dẫn dùng (kèm hướng dẫn com0com cho COM)
+[CHORE]    ScanAndScale.sln, ScanAndScaleDriver.sln             — Đăng ký project ScaleSimulator vào cả 2 solution
+[DOCS]     CLAUDE.md                                             — Cập nhật active_context + CHANGELOG
+```
+
+**Yêu cầu:** Tạo project mô phỏng thiết bị cân qua TCP và qua RS232 để test — dùng để test
+`ScanAndScale.Core/Drivers/ScaleDriver.cs` (cả 2 nhánh `ConnectionType.Tcp` và `.Com`) mà
+không cần cân điện tử thật, trong lúc đang chờ cân Vibra_HAW30 thật để test end-to-end
+(xem `blocked_by` ở Section 4.1).
+
+**Thiết kế:** `ScaleSimulator` là 1 app WinForms độc lập, KHÔNG reference
+`ScanAndScale.Core`/`Scale_*` — lý do: `ScanAndScale.Core.csproj` bật
+`GeneratePackageOnBuild=true` và kéo theo build lồng 6 project `Scale_*` mỗi lần build (xem
+CHANGELOG [2026-08-20] phía dưới, mục "Lưu ý build") — nếu simulator phụ thuộc vào đó, mỗi
+lần build/chạy simulator để test sẽ ăn theo toàn bộ pipeline NuGet pack/push chậm đó, phản
+tác dụng với mục đích "công cụ test nhanh". Thay vào đó, `ScaleFormats/ScaleFormatDefinition.cs`
+tự định nghĩa lại (bằng string literal) đúng 5 format raw data, được viết bằng cách đọc trực
+tiếp regex/điều kiện `rawData.Length == N` trong từng `Scale_*/ScaleReading.cs` để đảm bảo
+dòng dữ liệu simulator phát ra LUÔN được driver thật parse đúng.
+
+`ScaleSimEngine` chạy 1 `System.Threading.Timer` nền, mỗi tick tính giá trị hiệu dụng =
+target ± nhiễu ngẫu nhiên rồi build raw line, bắn sự kiện cho CẢ `TcpScaleServer` (broadcast
+tới mọi client TCP đang kết nối) và `SerialScaleServer` (ghi ra cổng COM đang mở) — 2 kênh
+độc lập, bật/tắt riêng, dùng CHUNG 1 nguồn dữ liệu (đúng thực tế 1 cân chỉ có 1 luồng dữ liệu).
+
+**COM cần cặp cổng ảo:** không như TCP có sẵn loopback `127.0.0.1`, test qua COM trên 1 máy
+cần 1 cặp cổng COM ảo null-modem (khuyến nghị **com0com** — driver mã nguồn mở, miễn phí) hoặc
+2 cổng COM thật nối cáp null-modem — mở simulator ở 1 đầu, trỏ `ScaleConfig.ComPort` của app
+đang test sang đầu còn lại. Chi tiết trong `ScaleSimulator/README.md`.
+
+**Lưu ý phát hiện được (không phải bug do session này gây ra):** `Scale_Vibra_SJ6200/ScaleReading.cs`
+gán `Stable = (flag == "S")` nhưng comment ngay trong chính file đó lại ghi "U là ổn định" —
+tức code và comment mâu thuẫn nhau, khả năng là bug có sẵn. Simulator KHÔNG tự sửa (ngoài
+phạm vi yêu cầu), chỉ cho phép chọn trực tiếp cả 2 giá trị U/S để user tự kiểm chứng
+`ScaleDriver.IsStable` thực tế trả về gì — xem ghi chú trong `ScaleFormatDefinition.cs` và
+`README.md`.
+
+**Build:** `ScaleSimulator.csproj` build độc lập qua MSBuild — sạch (exit 0), chỉ cần thêm
+`PackageReference System.IO.Ports` (không tự có sẵn trong Windows Desktop shared framework,
+đúng version 9.0.2 đã dùng ở `ScanAndScale.Core.csproj`). Build lại toàn bộ `ScanAndScale.sln`
+(gồm cả `ScaleSimulator` mới) — sạch (exit 0). Restore lần đầu mất ~2.3 phút do NuGet cố thử
+server nội bộ không reachable (`10.40.10.4:5860` — xem CHANGELOG [2026-08-20] phía dưới) trước
+khi rơi về `nuget.org`; các lần build sau nhanh bình thường nhờ cache.
+
+**Chưa test:** Chưa tự chạy thử simulator kết nối thật với `WpfSample` (cả nhánh TCP lẫn COM
+qua com0com) trong session này — chỉ verify build sạch. Cần user tự chạy và xác nhận.
+
+**CẬP NHẬT — user chạy Debug trong Visual Studio, crash ngay khi mở app; đã fix + tự verify
+bằng cách chạy thật (không chỉ build):**
+
+1. **Crash `ArgumentOutOfRangeException` trên `_cboModel.SelectedIndex = 0`
+   (`MainForm.cs` constructor).** Root cause: `ComboBox.DataSource` không populate `Items`
+   đồng bộ — chỉ điền dữ liệu khi control có `Handle` (thường chỉ có khi Form được realize,
+   vd lúc `Show`/`Load`). Set `SelectedIndex=0` ngay trong constructor (lúc `Items.Count`
+   vẫn = 0) ném exception. **Fix:** dời việc chọn model ban đầu (và `_engine.Start()`) sang
+   sự kiện `Load` của Form thay vì gọi trong constructor.
+2. **Layout vỡ (phát hiện qua ảnh chụp màn hình sau khi fix crash #1):** 2 panel TCP/COM
+   trong "2 & 3. Kênh phát dữ liệu" đè chồng lên nhau ở góc (0,0) — do các control con
+   (`tcpHint`/`tcpLayout`, `comHint`/`comLayout`) được thêm vào `GroupBox` mà KHÔNG set
+   `Dock`, mặc định `Location=(0,0)`. Set `Dock=DockStyle.Top` cho cả 4 control thì lộ ra
+   **bug thứ 2**: `tcpGrp`/`comGrp` dùng `AutoSize=true` + có con `Dock=Top` bên trong +
+   đồng thời ép cứng `Width=460` — tạo vòng phụ thuộc kích thước khiến GroupBox co gần về 0,
+   `Text` tự xuống dòng từng ký tự (thấy rõ trong ảnh chụp). **Fix:** bỏ `AutoSize=true` ở
+   `tcpGrp`/`comGrp`, dùng `Size` cố định (`460x190` và `460x235`) thay vì để tự tính.
+3. **Tự verify bằng cách CHẠY THẬT** (không chỉ build): build → chạy `ScaleSimulator.exe` →
+   chụp màn hình xác nhận layout đúng → dùng UI Automation (`System.Windows.Automation`) bấm
+   nút "Bật TCP server" → xác nhận cổng 23 thật sự listen (`Test-NetConnection`) → mở
+   `TcpClient` thật kết nối tới `127.0.0.1:23`, đọc được đúng `"0000.00@="` (9 ký tự, khớp
+   `Scale_DIGI`) → đổi ComboBox Model sang `Scale_Vibra_HAW30` qua UI Automation → đọc lại,
+   nhận đúng `"ST,NT,+  0.000  g"` (khớp regex `Scale_Vibra_HAW30`) → log panel hiện đúng
+   client connect/disconnect kèm số lượng. Tất cả PASS.
+
+Bài học: build sạch (exit 0) KHÔNG đảm bảo app WinForms chạy được — lỗi `SelectedIndex`/layout
+này không phải lỗi biên dịch nên MSBuild không bắt được. Từ nay với `ScaleSimulator`, sau mỗi
+thay đổi UI đáng kể nên tự chạy + chụp màn hình xác nhận, không chỉ dừng ở build.
 
 ---
 
