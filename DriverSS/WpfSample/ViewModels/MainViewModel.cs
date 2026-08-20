@@ -64,10 +64,13 @@ namespace WpfSample.ViewModels
         private DriverStatus _scaleStatus = DriverStatus.Unknown;
         private string _scaleLog = "";
 
-        // --- Scale config (chọn driver + nhập IP trên UI) ---
+        // --- Scale config (chọn driver + kiểu kết nối + IP hoặc COM trên UI) ---
         private string _selectedScaleModel = ScaleModelNames.Vibra_HAW30;
+        private ScaleConnectionType _scaleConnectionType = ScaleConnectionType.Tcp;
         private string _scaleIp = "192.168.80.237";
         private int _scalePort = 23;
+        private string _scaleComPort = "COM3";
+        private int _scaleBaudRate = 9600;
 
         // --- UI State ---
         private bool _isInitialized = false;
@@ -244,7 +247,38 @@ namespace WpfSample.ViewModels
         }
 
         /// <summary>
-        /// Địa chỉ IP của cân, nhập tay trên UI (TextBox "IP").
+        /// Danh sách kiểu kết nối hợp lệ để đổ vào ComboBox "Kết nối".
+        /// </summary>
+        public IReadOnlyList<ScaleConnectionType> AvailableConnectionTypes { get; } =
+            new[] { ScaleConnectionType.Tcp, ScaleConnectionType.Com };
+
+        /// <summary>
+        /// Kiểu kết nối đang chọn trên UI (ComboBox "Kết nối"): TCP/IP hay COM trực tiếp.
+        /// Đổi giá trị này sẽ ẩn/hiện đúng nhóm control tương ứng (IP/Port hoặc COM/Baud)
+        /// qua <see cref="IsScaleTcp"/> / <see cref="IsScaleCom"/>.
+        /// </summary>
+        public ScaleConnectionType ScaleConnectionType
+        {
+            get => _scaleConnectionType;
+            set
+            {
+                if (SetProperty(ref _scaleConnectionType, value))
+                {
+                    OnPropertyChanged(nameof(IsScaleTcp));
+                    OnPropertyChanged(nameof(IsScaleCom));
+                }
+            }
+        }
+
+        /// <summary>True khi đang chọn kết nối TCP/IP — dùng để show/hide panel IP/Port trên UI.</summary>
+        public bool IsScaleTcp => _scaleConnectionType == ScaleConnectionType.Tcp;
+
+        /// <summary>True khi đang chọn kết nối COM — dùng để show/hide panel ComPort/BaudRate trên UI.</summary>
+        public bool IsScaleCom => _scaleConnectionType == ScaleConnectionType.Com;
+
+        /// <summary>
+        /// Địa chỉ IP của cân, nhập tay trên UI (TextBox "IP"). Chỉ áp dụng khi
+        /// <see cref="ScaleConnectionType"/> = Tcp.
         /// Áp dụng vào <see cref="ScaleConfig"/> khi bấm "Kết nối tất cả".
         /// </summary>
         public string ScaleIp
@@ -261,7 +295,24 @@ namespace WpfSample.ViewModels
         }
 
         /// <summary>
-        /// Cho phép sửa Driver/IP/Port trên UI hay không.
+        /// Tên cổng COM của cân, nhập tay trên UI (TextBox "COM"). Chỉ áp dụng khi
+        /// <see cref="ScaleConnectionType"/> = Com. Ví dụ: "COM3".
+        /// </summary>
+        public string ScaleComPort
+        {
+            get => _scaleComPort;
+            set => SetProperty(ref _scaleComPort, value);
+        }
+
+        /// <summary>Baud rate cổng COM của cân, nhập tay trên UI (TextBox "Baud"). Mặc định 9600.</summary>
+        public int ScaleBaudRate
+        {
+            get => _scaleBaudRate;
+            set => SetProperty(ref _scaleBaudRate, value);
+        }
+
+        /// <summary>
+        /// Cho phép sửa Driver/kiểu kết nối/IP/Port/COM trên UI hay không.
         /// Chỉ cho sửa khi CHƯA kết nối — tránh đổi cấu hình giữa chừng
         /// trong khi ScaleDriver đang chạy (phải Ngắt kết nối trước).
         /// </summary>
@@ -332,8 +383,9 @@ namespace WpfSample.ViewModels
             BaudRate = 9600              // Tốc độ baud của thiết bị RFID
         };
 
-        // Cấu hình Scale (TCP/IP) — Driver/IP/Port lấy từ UI (SelectedScaleModel/ScaleIp/ScalePort),
-        // các thông số còn lại giữ giá trị mặc định hợp lý cho demo.
+        // Cấu hình Scale (TCP/IP hoặc COM) — Driver/kiểu kết nối/IP-Port hoặc COM-Baud lấy
+        // từ UI (SelectedScaleModel/ScaleConnectionType/...), các thông số còn lại giữ
+        // giá trị mặc định hợp lý cho demo.
         // Xem BuildScaleConfig() — được gọi lại mỗi lần InitializeAllDrivers().
         private const int    ScaleTimeScanMs = 400;   // Đọc mỗi 400ms
         private const double ScaleCalibZero  = 0.0;   // Hiệu chỉnh offset
@@ -341,23 +393,29 @@ namespace WpfSample.ViewModels
         private const int    ScaleDecimalNum = 3;      // Số chữ số thập phân
 
         /// <summary>
-        /// Dựng <see cref="ScaleConfig"/> từ giá trị Driver/IP/Port đang chọn trên UI.
-        /// Dùng ScaleModelNames thay cho string thô → tránh typo, IntelliSense hỗ trợ.
-        /// DLL model cân (Scale_DIGI.dll, ...) đã được nhúng vào ScanAndScale.Core.dll —
-        /// không cần file bên ngoài.
+        /// Dựng <see cref="ScaleConfig"/> từ giá trị Driver/kiểu kết nối/IP-Port hoặc
+        /// COM-Baud đang chọn trên UI. Dùng ScaleModelNames thay cho string thô → tránh
+        /// typo, IntelliSense hỗ trợ. DLL model cân (Scale_DIGI.dll, ...) đã được nhúng
+        /// vào ScanAndScale.Core.dll — không cần file bên ngoài.
+        /// IP/Port và ComPort/BaudRate luôn được set cả hai (dù chỉ 1 bên được dùng theo
+        /// ConnectionType) — vô hại, và giúp giữ nguyên giá trị nếu user đổi qua đổi lại
+        /// ComboBox "Kết nối" nhiều lần trước khi bấm "Kết nối tất cả".
         /// </summary>
         private ScaleConfig BuildScaleConfig() => new ScaleConfig
         {
-            Enable      = true,
-            IP          = _scaleIp,
-            Port        = _scalePort,
-            ModelName   = _selectedScaleModel,
-            TimeScanMs  = ScaleTimeScanMs,
-            CalibZero   = ScaleCalibZero,
-            CalibGain   = ScaleCalibGain,
-            DecimalNum  = ScaleDecimalNum,
-            CheckStable = false,       // Không yêu cầu stable
-            CheckTare   = false        // Không kiểm tra tare
+            Enable         = true,
+            ConnectionType = _scaleConnectionType,
+            IP             = _scaleIp,
+            Port           = _scalePort,
+            ComPort        = _scaleComPort,
+            BaudRate       = _scaleBaudRate,
+            ModelName      = _selectedScaleModel,
+            TimeScanMs     = ScaleTimeScanMs,
+            CalibZero      = ScaleCalibZero,
+            CalibGain      = ScaleCalibGain,
+            DecimalNum     = ScaleDecimalNum,
+            CheckStable    = false,       // Không yêu cầu stable
+            CheckTare      = false        // Không kiểm tra tare
         };
 
         // ===================================================
@@ -444,8 +502,12 @@ namespace WpfSample.ViewModels
             _scaleDriver = new ScaleDriver();
             _scaleDriver.DataValueChanged += OnScaleDataChanged;
             _scaleDriver.Initialize(scaleConfig);
+
+            string scaleConnDesc = scaleConfig.ConnectionType == ScaleConnectionType.Com
+                ? $"COM {scaleConfig.ComPort} ({scaleConfig.BaudRate} baud)"
+                : $"{scaleConfig.IP}:{scaleConfig.Port}";
             AppendLog(ref _scaleLog, nameof(ScaleLog),
-                $"Đang kết nối cân {scaleConfig.ModelName} tại {scaleConfig.IP}:{scaleConfig.Port}...");
+                $"Đang kết nối cân {scaleConfig.ModelName} qua {scaleConnDesc}...");
 
             IsInitialized = true;
             StatusMessage = "Tất cả drivers đã được khởi tạo. Đang lắng nghe dữ liệu...";

@@ -41,6 +41,12 @@
         <conv:TareToBackgroundConverter x:Key="TareToBg" />
         <conv:TareToVisibilityConverter x:Key="TareToVis" />
         <conv:InverseBoolToVisibilityConverter x:Key="InvBoolToVis" />
+        <!--
+            Converter dựng sẵn của WPF: bool → Visibility (true=Visible, false=Collapsed).
+            Dùng để show/hide panel IP/Port (IsScaleTcp) và panel COM/Baud (IsScaleCom) —
+            luôn đúng 1 trong 2 hiện tại một thời điểm vì 2 property loại trừ lẫn nhau.
+        -->
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
         <!--  Style chung cho GroupBox tiêu đề  -->
         <Style x:Key="DeviceGroupBox" TargetType="GroupBox">
@@ -307,7 +313,7 @@
                 -->
                 <GroupBox
                     Grid.Column="2"
-                    Header="⚖️ Cân điện tử (TCP/IP)"
+                    Header="⚖️ Cân điện tử (TCP/IP hoặc COM)"
                     Style="{StaticResource DeviceGroupBox}">
                     <StackPanel>
 
@@ -391,8 +397,27 @@
                                 SelectedItem="{Binding SelectedScaleModel}" />
                         </StackPanel>
 
-                        <!--  IP + Port cân — nhập tay, áp dụng khi bấm "Kết nối tất cả"  -->
-                        <StackPanel Margin="4,4,4,0" Orientation="Horizontal">
+                        <!--
+                            Chọn kiểu kết nối: TCP/IP (qua LAN hoặc bộ chuyển đổi RS232-to-TCP)
+                            hay COM (cắm trực tiếp cổng Serial/USB-to-Serial). Đổi giá trị này
+                            tự động show/hide đúng panel bên dưới (IsScaleTcp / IsScaleCom).
+                            Chỉ cho sửa khi CHƯA kết nối, giống Driver/IP/Port.
+                        -->
+                        <StackPanel Margin="4,6,4,0" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="Kết nối: " />
+                            <ComboBox
+                                Width="190"
+                                VerticalAlignment="Center"
+                                IsEnabled="{Binding CanEditScaleConfig}"
+                                ItemsSource="{Binding AvailableConnectionTypes}"
+                                SelectedItem="{Binding ScaleConnectionType}" />
+                        </StackPanel>
+
+                        <!--  IP + Port cân — chỉ hiện khi ConnectionType = Tcp  -->
+                        <StackPanel
+                            Margin="4,4,4,0"
+                            Orientation="Horizontal"
+                            Visibility="{Binding IsScaleTcp, Converter={StaticResource BoolToVis}}">
                             <TextBlock Style="{StaticResource LabelStyle}" Text="IP: " />
                             <TextBox
                                 Width="120"
@@ -405,6 +430,25 @@
                                 VerticalAlignment="Center"
                                 IsEnabled="{Binding CanEditScaleConfig}"
                                 Text="{Binding ScalePort, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+
+                        <!--  COM Port + Baud rate cân — chỉ hiện khi ConnectionType = Com  -->
+                        <StackPanel
+                            Margin="4,4,4,0"
+                            Orientation="Horizontal"
+                            Visibility="{Binding IsScaleCom, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="COM: " />
+                            <TextBox
+                                Width="70"
+                                VerticalAlignment="Center"
+                                IsEnabled="{Binding CanEditScaleConfig}"
+                                Text="{Binding ScaleComPort, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Style="{StaticResource LabelStyle}" Text=" Baud: " />
+                            <TextBox
+                                Width="70"
+                                VerticalAlignment="Center"
+                                IsEnabled="{Binding CanEditScaleConfig}"
+                                Text="{Binding ScaleBaudRate, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
 
                     </StackPanel>

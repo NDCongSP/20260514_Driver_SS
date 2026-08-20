@@ -188,17 +188,20 @@ const delay = 350; // gán delay bằng 350
 ```yaml
 # Cập nhật phần này MỖI KHI kết thúc session làm việc
 active_context:
-  current_task:     "Cân Shimadzu TX4202L: giá trị hiển thị đúng + real-time, nhưng badge 'False (Stable)' KHÔNG bao giờ chuyển True dù cân đã đứng yên nhiều giây (log Log Scale toàn 'Stable:False' lặp lại) — đã thêm diagnostic StabilityDebugInfo để xem đúng con số thực tế thay vì đoán mò, CHƯA có kết quả test lại từ user"
+  current_task:     "Thêm kết nối trực tiếp qua cổng COM (RS232/USB-to-Serial) cho Scale Driver, song song với TCP/IP hiện có (qua bộ chuyển đổi RS232-to-TCP) — cấu hình được ConnectionType (Tcp/Com) lúc khởi tạo. Đã implement Ở TẦNG DÙNG CHUNG (ScaleDriver.cs/ScaleConfig.cs) nên áp dụng cho MỌI model cân cùng lúc (không cần sửa riêng từng Scale_*), theo đúng yêu cầu 'test Vibra_HAW30 trước, OK thì triển khai hàng loạt' — vì kiến trúc vốn đã dùng chung 1 driver cho tất cả model (model cân chỉ là DLL parser nạp qua reflection, không biết TCP hay COM). Build sạch (exit 0) qua MSBuild, nhưng CHƯA test với cân thật qua COM — user chưa xác nhận."
   related_files:
-    - "Scale_Shimadzu_TX4202L/ScaleReading.cs"            # UpdateStability() + LastStabilityInfo (debug field mới)
-    - "ScanAndScale.Core/Drivers/ScaleDriver.cs"          # _stabilityDebugField (reflection best-effort) + StabilityDebugInfo property
-    - "WpfSample/ViewModels/MainViewModel.cs"             # Log Scale in kèm StabilityDebugInfo
-  blocked_by:       "Chưa rõ root cause thật của bug Stable=false mãi mãi — về lý thuyết code ĐÚNG (StableWindowSize=5, StableToleranceG=0.02g, TimeScanMs=400ms => phải lên True trong ~2s nếu 5 giá trị liên tiếp giống hệt nhau). Đã verify: build KHÔNG stale (đã rebuild sạch, grep binary xác nhận UpdateStability/LastStabilityInfo có trong DLL đang chạy). Nghi vấn còn lại: (1) nhiễu raw thực tế giữa các lần đọc > 0.02g dù hiển thị làm tròn giống nhau, hoặc (2) app WpfSample.exe lúc user test là process CŨ chưa restart sau build mới."
-  next_step:        "User Rebuild Solution (MSBuild, KHÔNG dùng dotnet CLI) → ĐÓNG HẲN WpfSample.exe đang chạy (nếu có) → mở lại từ đầu → kết nối cân Shimadzu → để cân đứng yên vài giây → đọc dòng '[win=x/5 range=...g (tol=0.02g) -> ...]' mới xuất hiện trong panel Log Scale, gửi lại vài dòng đó để xác định chính xác nhiễu thực tế (nếu range > 0.02g thường xuyên thì cần nới StableToleranceG, còn nếu range luôn <= 0.02g mà Stable vẫn False thì là bug binding/khác cần đào sâu tiếp)"
-  last_session:     "2026-08-14"
+    - "ScanAndScale.Core/Models/ScaleConfig.cs"           # ScaleConnectionType enum (Tcp/Com) + ConnectionType/ComPort/BaudRate
+    - "ScanAndScale.Core/Drivers/ScaleDriver.cs"          # Connect/Read/Reconnect dispatcher theo ConnectionType; nhánh Com dùng SerialPort.BaseStream + StreamReader (leaveOpen), cùng chiến lược drain-backlog như nhánh Tcp (BytesToRead thay Socket.Available)
+    - "WpfSample/ViewModels/MainViewModel.cs"             # ScaleConnectionType/ScaleComPort/ScaleBaudRate + IsScaleTcp/IsScaleCom, BuildScaleConfig() truyền qua
+    - "WpfSample/MainWindow.xaml"                         # ComboBox "Kết nối" (Tcp/Com) + panel COM/Baud ẩn/hiện qua BooleanToVisibilityConverter
+    - "ScanAndScale.Core/ScanAndScale.Core.csproj"        # (không liên quan COM) Fix NU1012 khi Pack — đổi TargetFrameworks bare net6.0-windows/net8.0-windows → net6.0-windows7.0/net8.0-windows7.0 (khớp pattern ScanAndScale.Driver/TestDriver/WinFormsApp1 đã dùng sẵn), phải xoá obj/ + Restore lại sau khi đổi TFM
+  blocked_by:       "Chưa có cân Vibra_HAW30 thật cắm qua COM để test end-to-end (mở port, đọc dữ liệu, auto-reconnect khi rút cáp). Code compile sạch nhưng logic SerialPort.BaseStream + StreamReader.ReadLineAsync (đặc biệt phần drain-backlog dùng BytesToRead) mới chỉ verify tĩnh, chưa chạy với cân thật."
+  next_step:        "User: mở WpfSample, ComboBox 'Driver'=Scale_Vibra_HAW30 (mặc định), đổi ComboBox 'Kết nối' sang COM, nhập đúng ComPort (vd COM3, xem Device Manager) + Baud rate (thường 9600 — xem tài liệu cân), bấm 'Kết nối tất cả', xác nhận: (1) badge trạng thái lên Connected, (2) giá trị cân hiển thị đúng + real-time trong Log Scale, (3) rút cáp COM thử auto-reconnect có hoạt động không. Nếu OK → không cần sửa gì thêm ở tầng driver (đã dùng chung), chỉ cần các Scale_* khác test tương tự bằng cách đổi ComboBox 'Driver' sang model tương ứng."
+  last_session:     "2026-08-20"
   open_questions:
     - "Cân có hỗ trợ báo cờ ổn định (Stable) qua RS-232C không, hay phải luôn đọc raw liên tục như hiện tại? Raw data thật thu được chưa thấy cờ ST/US — đã chuyển sang tự suy luận Stable ở phần mềm (UpdateStability), nhưng chưa xác nhận ngưỡng StableToleranceG=0.02g có phù hợp với nhiễu thực tế của cân hay không."
     - "Scale_Vibra_SJ6200 và Scale_Vibra_HAW30 có cùng bug gán Unit=raw-unit dù WeightValue đã quy đổi KG (giống bug vừa fix ở Shimadzu) — có cần sửa luôn không?"
+    - "Cân Vibra_HAW30 cắm COM trực tiếp dùng Parity/DataBits/StopBits gì? Hiện ScaleDriver hard-code None/8/One (giống RfidDriver) — nếu cân thật cần khác thì phải thêm field vào ScaleConfig."
 ```
 
 ### 4.2 Quyết định đã chốt (Decision Log)
@@ -230,6 +233,72 @@ Task hiện tại: [mô tả]. File cần làm việc: [list file].
 > Ghi lại **mọi thay đổi đáng kể** theo thứ tự ngược (mới nhất lên đầu).  
 > Format: `[YYYY-MM-DD] [TYPE] [File/Module] — Mô tả`  
 > Types: `FEAT` · `FIX` · `REFACTOR` · `PERF` · `TEST` · `DOCS` · `CHORE` · `BREAK`
+
+---
+
+### [2026-08-20] — Session: Thêm kết nối COM trực tiếp cho Scale Driver (song song TCP/IP hiện có)
+
+```
+[FEAT]     ScanAndScale.Core/Models/ScaleConfig.cs           — Enum ScaleConnectionType (Tcp/Com);
+                                                                 ConnectionType, ComPort, BaudRate (default Tcp — không đổi hành vi cũ)
+[FEAT]     ScanAndScale.Core/Drivers/ScaleDriver.cs           — Connect/Read/Reconnect/IsConnected/Disconnect đều
+                                                                 dispatch theo ConnectionType; nhánh Com dùng SerialPort
+                                                                 (Parity.None/8/StopBits.One, giống RfidDriver) +
+                                                                 SerialPort.BaseStream/StreamReader (leaveOpen:true),
+                                                                 cùng chiến lược drain-backlog "luôn giữ dòng mới nhất"
+                                                                 như nhánh Tcp (BytesToRead thay Socket.Available)
+[FEAT]     WpfSample/ViewModels/MainViewModel.cs              — ScaleConnectionType/ScaleComPort/ScaleBaudRate,
+                                                                 IsScaleTcp/IsScaleCom, BuildScaleConfig() truyền qua
+[FEAT]     WpfSample/MainWindow.xaml                          — ComboBox "Kết nối" (TCP/IP | COM) + panel COM/Baud
+                                                                 ẩn/hiện qua BooleanToVisibilityConverter dựng sẵn
+[FIX]      ScanAndScale.Core/ScanAndScale.Core.csproj         — (không liên quan COM) Fix NU1012 khi Pack — xem chi tiết dưới
+```
+
+**Yêu cầu:** Cân hiện tại xuất RS232 qua bộ chuyển đổi Serial-to-Ethernet, driver đọc qua TCP (đã chạy ổn). Cần
+thêm khả năng cắm cân TRỰC TIẾP qua cổng COM (không qua bộ chuyển đổi), chọn được TCP hay COM lúc khởi tạo. Thử
+trước với Scale_Vibra_HAW30, sau khi test OK thật mới triển khai hàng loạt cho các driver cân khác.
+
+**Thiết kế:** `ScaleDriver.cs` vốn đã là driver DÙNG CHUNG cho MỌI model cân — model cân (Scale_DIGI, Scale_Vibra_HAW30,
+Scale_Shimadzu_TX4202L, ...) chỉ là DLL parser nạp qua reflection (`GetWeight()`), hoàn toàn không biết gì về TCP
+hay COM. Vì vậy chỉ cần thêm `ScaleConnectionType` vào `ScaleConfig` và dispatch theo nó trong `ScaleDriver` LÀ ĐỦ
+để áp dụng cho TẤT CẢ driver cân cùng lúc — không cần đụng vào từng `Scale_*.csproj`. Việc "test Vibra_HAW30 trước"
+vì vậy là bước xác nhận bằng phần cứng thật (chỉ đổi ComboBox "Driver" trên UI sang model khác là dùng được ngay
+cho các cân khác), không phải một bước code riêng.
+
+Nhánh COM (`ConnectSerialAsync`/`ReadScaleDataFromSerialAsync`/`TryReconnectSerialAsync`) được viết song song 1-1
+với nhánh TCP đã có sẵn — dùng `SerialPort.BaseStream` + `StreamReader` (thay `NetworkStream`), `SerialPort.IsOpen`
+(thay `TcpClient.Connected`), `SerialPort.BytesToRead` (thay `Socket.Available`) — giữ nguyên toàn bộ các fix quan
+trọng đã rút ra từ nhánh TCP trước đó (giữ persistent port suốt 1 kết nối thay vì mở/đóng mỗi tick, luôn await trọn
+vẹn không bao giờ bỏ dở read, luôn giữ dòng MỚI NHẤT khi có backlog). Parity/DataBits/StopBits cố định None/8/One
+(giống pattern SerialPort có sẵn trong `RfidDriver.OpenSerialPort`) — chưa expose ra `ScaleConfig` vì chưa rõ cân
+Vibra_HAW30 thật cần cấu hình khác không (xem `open_questions`).
+
+`ScaleConfig.ConnectionType` mặc định = `Tcp` → mọi cấu hình cũ (chỉ set `IP`/`Port`, không set `ConnectionType`)
+tiếp tục chạy giống hệt trước, không cần sửa gì. `MainViewModel`/`MainWindow.xaml` thêm ComboBox "Kết nối" + panel
+COM/Baud (ẩn/hiện qua `BooleanToVisibilityConverter` dựng sẵn của WPF) — mặc định vẫn TCP + Scale_Vibra_HAW30,
+đổi ComboBox sang COM là cách test nhánh mới.
+
+**Build (không liên quan COM) — fix kèm theo:** Trong lúc verify build, phát hiện commit ngay trước đó cùng ngày
+(`2a3d35d Automate NuGet packaging...`, đã bật `GeneratePackageOnBuild=true` cho `ScanAndScale.Core.csproj`) khiến
+`MSBuild ScanAndScale.sln` trả về exit code 1 do lỗi `NU1012: Some dependency group TFMs are missing a platform
+version: net6.0-windows, net8.0-windows` ở bước Pack — dù DLL vẫn build ra đúng, gây hiểu nhầm "build fail". Root
+cause: NuGet pack đòi TFM có hậu tố `-windows` phải ghi rõ platform version ngay trong moniker (vd.
+`net6.0-windows7.0`) để đưa vào nuspec dependency group; `TargetFrameworks` khai bare `net6.0-windows`/`net8.0-windows`
+(không số phiên bản) nên thiếu, dù MSBuild build bình thường vẫn ngầm hiểu = 7.0. Fix: đổi
+`TargetFrameworks` sang `net472;net6.0-windows7.0;net8.0-windows7.0` — ĐÚNG pattern đã dùng sẵn ở
+`ScanAndScale.Driver`/`TestDriver`/`WinFormsApp1` trong cùng solution (an toàn cho consumer vì MSBuild/NuGet coi
+TFM bare và có hậu tố `7.0` là CÙNG 1 TFM chuẩn hoá). Đổi `TargetFrameworks` làm `project.assets.json` cũ không còn
+khớp (lỗi `NETSDK1005`) nên phải xoá `obj/` của `ScanAndScale.Core`/`WpfSample` rồi `MSBuild -t:Restore` lại trước
+khi build. Verify: `MSBuild ScanAndScale.sln -m:1 -p:Configuration=Debug -p:PushToNuget=false` → **exit code 0**,
+chỉ còn warning vô hại (NuGet server nội bộ `10.40.10.4:5860` không reachable — không chặn build).
+
+**Lưu ý build:** `PushToNuget=true` (mặc định) khiến MỖI project (kể cả 6 `Scale_*` build lồng trong
+`BuildAndCopyScaleDlls`) đều thử `dotnet nuget push` tới server nội bộ hiện KHÔNG reachable từ máy dev này — mỗi
+lần build tốn thời gian chờ timeout mạng nhiều lần (đã khiến 1 lần build bị user huỷ vì tưởng treo). Khi cần build
+nhanh để verify (không cần publish gói), truyền `-p:PushToNuget=false`.
+
+**Chưa test:** Chưa có cân Vibra_HAW30 thật cắm qua COM để xác nhận end-to-end (mở port, đọc đúng giá trị real-time,
+auto-reconnect khi rút cáp).
 
 ---
 

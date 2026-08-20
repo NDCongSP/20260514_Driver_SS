@@ -5,9 +5,9 @@
   ScanAndScale.Core - Thu vien driver da nen tang
   ============================================================
   Multi-target:
-    net472          .NET Framework 4.7.2 (WinForms cu)
-    net6.0-windows  .NET 6  (WinForms / WPF)
-    net8.0-windows  .NET 8  (WinForms / WPF)
+    net472              .NET Framework 4.7.2 (WinForms cu)
+    net6.0-windows7.0   .NET 6  (WinForms / WPF)
+    net8.0-windows7.0   .NET 8  (WinForms / WPF)
 
   Khong phu thuoc WinForms, WPF, DevExpress.
 
@@ -20,12 +20,24 @@
   -->
 
   <PropertyGroup>
-    <TargetFrameworks>net472;net6.0-windows;net8.0-windows</TargetFrameworks>
+    <!--
+    FIX (NU1012 khi Pack): "Some dependency group TFMs are missing a platform version:
+    net6.0-windows, net8.0-windows". NuGet pack (GeneratePackageOnBuild=true) đòi hỏi TFM
+    có hậu tố -windows phải ghi rõ platform version trong chính moniker (vd.
+    "net6.0-windows7.0") để đưa vào nuspec dependency group — bare "net6.0-windows" /
+    "net8.0-windows" (không số phiên bản) bị NuGet coi là thiếu thông tin dù MSBuild build
+    bình thường vẫn ngầm hiểu = 7.0. Thêm hậu tố "7.0" — ĐÚNG pattern đã dùng sẵn ở các
+    project khác trong solution (ScanAndScale.Driver, TestDriver, WinFormsApp1 đều dùng
+    "net8.0-windows7.0"). An toàn cho consumer: MSBuild/NuGet coi "net8.0-windows" (bare,
+    vd. WpfSample.csproj) và "net8.0-windows7.0" là CÙNG một TFM đã chuẩn hoá (7.0 vốn là
+    platform version ngầm định) nên ProjectReference vẫn resolve bình thường.
+    -->
+    <TargetFrameworks>net472;net6.0-windows7.0;net8.0-windows7.0</TargetFrameworks>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <AssemblyName>ScanAndScale.Core</AssemblyName>
     <RootNamespace>ScanAndScale.Core</RootNamespace>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <Description>Cross-platform driver library for Barcode, RFID, Scale. Works on WinForms and WPF.</Description>
     <Authors>ScanAndScale</Authors>
     <NugetUrl>http://10.40.10.4:5860/v3/index.json</NugetUrl>

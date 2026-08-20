@@ -1,18 +1,24 @@
 // ============================================================
 // File: Drivers/ScaleDriver.cs
-// Mục đích: Driver đọc giá trị cân điện tử qua TCP/IP (Telnet)
+// Mục đích: Driver đọc giá trị cân điện tử qua TCP/IP (Telnet) HOẶC
+//           trực tiếp qua cổng COM (RS232/USB-to-Serial) — chọn bằng
+//           ScaleConfig.ConnectionType.
 //
 // Nguyên lý hoạt động:
-//   1. Kết nối TCP đến IP:Port của cân
-//   2. Timer đọc liên tục theo chu kỳ TimeScanMs
-//   3. Mỗi lần đọc: nhận một dòng dữ liệu thô từ cân
-//   4. Gọi hàm GetWeight() trong DLL model cân để parse dữ liệu
-//   5. Bắn sự kiện DataValueChanged với giá trị đã parse
+//   1. Kết nối TCP đến IP:Port (ConnectionType=Tcp) hoặc mở cổng COM
+//      (ConnectionType=Com) của cân.
+//   2. Timer đọc liên tục theo chu kỳ TimeScanMs — CHUNG cho cả 2 kiểu
+//      kết nối, chỉ khác nguồn đọc (NetworkStream vs SerialPort).
+//   3. Mỗi lần đọc: nhận một dòng dữ liệu thô từ cân.
+//   4. Gọi hàm GetWeight() trong DLL model cân để parse dữ liệu —
+//      KHÔNG phụ thuộc kiểu kết nối, model cân không cần biết TCP hay COM.
+//   5. Bắn sự kiện DataValueChanged với giá trị đã parse.
 //
 // AUTO-RECONNECT:
-//   Khi TCP mất kết nối (Connected=false hoặc exception khi đọc),
-//   driver dừng read-timer, chuyển sang Reconnecting và thử kết nối
-//   lại TCP mỗi 3 giây. Khi thành công, read-timer được khởi động lại.
+//   Khi mất kết nối (TCP: Connected=false; COM: IsOpen=false, hoặc
+//   exception khi đọc ở cả 2 kiểu), driver dừng read-timer, chuyển sang
+//   Reconnecting và thử kết nối lại mỗi 3 giây (đúng kiểu kết nối đang
+//   dùng). Khi thành công, read-timer được khởi động lại.
 //
 // QUAN TRỌNG VỀ THREAD:
 //   Timer callback và đọc dữ liệu chạy trên ThreadPool thread.
@@ -25,16 +31,19 @@
 //   trong finally → timer không bao giờ restart → giá trị đóng băng.
 //   SemaphoreSlim.Release() an toàn với mọi thread.
 //
-//   NetworkStream + StreamReader được giữ persistent suốt 1 kết nối
-//   (tạo lại khi reconnect) để tránh 2 read chạy song song khi timeout.
+//   NetworkStream + StreamReader (nhánh TCP) / SerialPort.BaseStream +
+//   StreamReader (nhánh COM) được giữ persistent suốt 1 kết nối (tạo
+//   lại khi reconnect) để tránh 2 read chạy song song khi timeout.
 // ============================================================
 
 using ScanAndScale.Core.Models;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Ports;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 #if !NETFRAMEWORK
@@ -44,17 +53,22 @@ using System.Runtime.Loader;
 namespace ScanAndScale.Core.Drivers
 {
     /// <summary>
-    /// Driver đọc giá trị cân điện tử qua TCP/IP.
+    /// Driver đọc giá trị cân điện tử qua TCP/IP hoặc trực tiếp qua cổng COM
+    /// (chọn bằng <see cref="ScaleConfig.ConnectionType"/>).
     /// KHÔNG phải Singleton — mỗi cân là một instance riêng biệt.
-    /// Hỗ trợ tự động kết nối lại khi mất kết nối TCP.
+    /// Hỗ trợ tự động kết nối lại khi mất kết nối.
     /// </summary>
     public class ScaleDriver : IDisposable
     {
         // ===================================================
         // FIELDS
         // ===================================================
+        // Nhánh TCP (ConnectionType = Tcp)
         private TcpClient?              _tcpClient;
         private Socket?                 _socket;
+        // Nhánh COM (ConnectionType = Com)
+        private SerialPort?             _serialPort;
+
         private System.Timers.Timer?    _readTimer;
         private ScaleConfig?            _config;
         private object?                 _scaleModelInstance;
@@ -87,7 +101,16 @@ namespace ScanAndScale.Core.Drivers
         // PROPERTIES
         // ===================================================
         public DataValue CurrentValue => _currentDataValue;
-        public bool      IsConnected  => _tcpClient?.Connected == true;
+
+        /// <summary>
+        /// Đã kết nối chưa — kiểm tra đúng field theo <see cref="ScaleConfig.ConnectionType"/>
+        /// đang cấu hình (TCP: TcpClient.Connected; COM: SerialPort.IsOpen).
+        /// </summary>
+        public bool IsConnected =>
+            _config?.ConnectionType == ScaleConnectionType.Com
+                ? _serialPort?.IsOpen == true
+                : _tcpClient?.Connected == true;
+
         public bool      IsStable     => _isStable;
         public bool      IsTare       => _isTare;
         public string    Unit         => _unit;
@@ -250,11 +273,21 @@ namespace ScanAndScale.Core.Drivers
         }
 
         // ===================================================
+        // CONNECT (dispatcher theo ConnectionType)
+        // ===================================================
+
+        /// <summary>Kết nối lần đầu (TCP hoặc COM tuỳ ConnectionType), sau đó start read-timer.</summary>
+        private Task ConnectAsync() =>
+            _config!.ConnectionType == ScaleConnectionType.Com
+                ? ConnectSerialAsync()
+                : ConnectTcpAsync();
+
+        // ===================================================
         // TCP CONNECT
         // ===================================================
 
         /// <summary>Kết nối TCP lần đầu, sau đó start read-timer.</summary>
-        private async Task ConnectAsync()
+        private async Task ConnectTcpAsync()
         {
             try
             {
@@ -279,9 +312,52 @@ namespace ScanAndScale.Core.Drivers
             }
             catch (Exception ex)
             {
-                LogError(ex, "ConnectAsync");
+                LogError(ex, "ConnectTcpAsync");
                 SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
             }
+        }
+
+        // ===================================================
+        // COM CONNECT
+        // ===================================================
+
+        /// <summary>Mở cổng COM lần đầu, sau đó start read-timer.</summary>
+        private async Task ConnectSerialAsync()
+        {
+            try
+            {
+                LogInfo($"Đang mở cổng COM {_config!.ComPort} ({_config.BaudRate} baud)...");
+
+                // SerialPort.Open() là blocking call — chạy trên ThreadPool để không
+                // giữ synchronization context (giống pattern await connectTask ở nhánh TCP).
+                await Task.Run(OpenSerialPortCore);
+
+                LogInfo($"Mở cổng COM thành công: {_config.ComPort} ({_config.BaudRate} baud).");
+                StartReadTimer();
+            }
+            catch (Exception ex)
+            {
+                LogError(ex, "ConnectSerialAsync");
+                SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
+            }
+        }
+
+        /// <summary>
+        /// Tạo và mở <see cref="SerialPort"/> theo cấu hình hiện tại. Dùng chung cho cả
+        /// kết nối lần đầu (<see cref="ConnectSerialAsync"/>) và reconnect
+        /// (<see cref="TryReconnectSerialAsync"/>). Ném exception nếu mở thất bại —
+        /// caller chịu trách nhiệm bắt và xử lý.
+        /// Parity/DataBits/StopBits cố định None/8/One — đúng chuẩn phổ biến nhất của
+        /// cân điện tử RS232 (giống pattern SerialPort trong RfidDriver.OpenSerialPort).
+        /// </summary>
+        private void OpenSerialPortCore()
+        {
+            _serialPort = new SerialPort(_config!.ComPort, _config.BaudRate, Parity.None, 8, StopBits.One)
+            {
+                ReadTimeout  = 3000,
+                WriteTimeout = 3000
+            };
+            _serialPort.Open();
         }
 
         // ===================================================
@@ -311,10 +387,10 @@ namespace ScanAndScale.Core.Drivers
 
             try
             {
-                // Kiểm tra kết nối TCP
-                if (_tcpClient == null || !_tcpClient.Connected)
+                // Kiểm tra kết nối — đúng field theo ConnectionType đang dùng
+                if (!IsConnected)
                 {
-                    LogInfo($"[Timer] TCP không kết nối (Connected={_tcpClient?.Connected}) — khởi động auto-reconnect.");
+                    LogInfo($"[Timer] Mất kết nối ({_config!.ConnectionType}) — khởi động auto-reconnect.");
                     SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
                     StartReconnectLoop();   // Reconnect loop sẽ restart timer sau khi thành công
                     return;                 // Không restart timer ở đây
@@ -342,9 +418,17 @@ namespace ScanAndScale.Core.Drivers
         }
 
         // ===================================================
-        // READ & PARSE
+        // READ & PARSE (dispatcher theo ConnectionType)
         // ===================================================
-        private async Task ReadScaleDataAsync()
+        private Task ReadScaleDataAsync() =>
+            _config!.ConnectionType == ScaleConnectionType.Com
+                ? ReadScaleDataFromSerialAsync()
+                : ReadScaleDataFromTcpAsync();
+
+        // ===================================================
+        // READ & PARSE — TCP
+        // ===================================================
+        private async Task ReadScaleDataFromTcpAsync()
         {
             try
             {
@@ -416,7 +500,81 @@ namespace ScanAndScale.Core.Drivers
             catch (Exception ex)
             {
                 // Lỗi network → báo Disconnected và khởi động reconnect
-                LogError(ex, "ReadScaleDataAsync");
+                LogError(ex, "ReadScaleDataFromTcpAsync");
+                SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
+                StartReconnectLoop();
+            }
+        }
+
+        // ===================================================
+        // READ & PARSE — COM
+        // ===================================================
+        private async Task ReadScaleDataFromSerialAsync()
+        {
+            try
+            {
+                if (_serialPort == null || !_serialPort.IsOpen)
+                {
+                    LogInfo("[Read-COM] SerialPort chưa mở — bỏ qua tick.");
+                    return;
+                }
+
+                // StreamReader trên SerialPort.BaseStream, leaveOpen:true — KHÔNG đóng
+                // BaseStream khi reader bị dispose cuối using, vì _serialPort là object
+                // persistent giữ suốt 1 kết nối (giống ownsSocket:false ở nhánh TCP,
+                // tránh phải mở/đóng cổng COM mỗi tick).
+                using var reader = new StreamReader(_serialPort.BaseStream, Encoding.ASCII,
+                    detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
+
+                var readTask    = reader.ReadLineAsync();
+                var timeoutTask = Task.Delay(3000);
+
+                if (await Task.WhenAny(readTask, timeoutTask) == timeoutTask)
+                {
+                    LogInfo("Timeout đọc dữ liệu từ cân (COM).");
+                    // readTask bị bỏ, reader sẽ bị dispose khi using kết thúc (không đóng port)
+                    return;
+                }
+
+                RawData = await readTask;
+
+                // null = EOF trên BaseStream — hiếm gặp với SerialPort (không có khái niệm
+                // "đóng kết nối từ xa" như TCP FIN), nhưng vẫn xử lý phòng hờ để nhất quán
+                // với nhánh TCP thay vì để null lọt xuống ParseScaleData bên dưới.
+                if (RawData == null)
+                {
+                    LogInfo("[Read-COM] EOF nhận được từ cổng COM — trigger reconnect.");
+                    SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
+                    StartReconnectLoop();
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(RawData))
+                {
+                    LogInfo("[Read-COM] Dòng rỗng — bỏ qua.");
+                    return;
+                }
+
+                // Drain backlog — cùng chiến lược "luôn giữ dòng mới nhất" như nhánh TCP
+                // (xem giải thích chi tiết ở ReadScaleDataFromTcpAsync). SerialPort.BytesToRead
+                // là kiểm tra đồng bộ, không I/O — an toàn để dùng thay Socket.Available.
+                while (_serialPort.BytesToRead > 0)
+                {
+                    var extra = await reader.ReadLineAsync();
+                    if (string.IsNullOrEmpty(extra))
+                        break; // EOF hoặc dòng rỗng — dừng, giữ RawData hiện tại
+
+                    RawData = extra; // Ghi đè bằng dòng mới hơn — luôn giữ bản mới nhất
+                }
+
+                ParseScaleData(RawData);
+                LogInfo($"[Read OK][COM] {_weightKg:F3} {_unit} (raw: '{RawData.Trim()}')");
+                SetDataValue(new DataValue(DriverStatus.Connected, _weightKg));
+            }
+            catch (Exception ex)
+            {
+                // Lỗi cổng COM (rút dây, tắt máy chuyển đổi USB...) → Disconnected + reconnect
+                LogError(ex, "ReadScaleDataFromSerialAsync");
                 SetDataValue(new DataValue(DriverStatus.Disconnected, 0.0));
                 StartReconnectLoop();
             }
@@ -450,8 +608,9 @@ namespace ScanAndScale.Core.Drivers
         // ===================================================
 
         /// <summary>
-        /// Dừng read-timer, chuyển sang Reconnecting và thử kết nối lại TCP
-        /// mỗi <see cref="ReconnectDelayMs"/> ms cho đến khi thành công hoặc dispose.
+        /// Dừng read-timer, chuyển sang Reconnecting và thử kết nối lại (đúng
+        /// ConnectionType đang dùng — TCP hoặc COM) mỗi <see cref="ReconnectDelayMs"/> ms
+        /// cho đến khi thành công hoặc dispose.
         /// Sau khi kết nối lại thành công, read-timer được khởi động lại.
         /// </summary>
         private void StartReconnectLoop()
@@ -478,8 +637,10 @@ namespace ScanAndScale.Core.Drivers
 
                     if (token.IsCancellationRequested || _disposed) break;
 
-                    LogInfo("[Reconnect] Đang thử kết nối lại TCP cân...");
-                    bool ok = await TryReconnectTcpAsync();
+                    LogInfo($"[Reconnect] Đang thử kết nối lại cân ({_config!.ConnectionType})...");
+                    bool ok = _config.ConnectionType == ScaleConnectionType.Com
+                        ? await TryReconnectSerialAsync()
+                        : await TryReconnectTcpAsync();
 
                     if (ok)
                     {
@@ -535,11 +696,29 @@ namespace ScanAndScale.Core.Drivers
             }
         }
 
+        /// <summary>Đóng cổng COM cũ (nếu có) và thử mở lại.</summary>
+        private async Task<bool> TryReconnectSerialAsync()
+        {
+            try
+            {
+                ClosePort();
+                await Task.Run(OpenSerialPortCore);
+
+                SetDataValue(new DataValue(DriverStatus.Connected, 0.0));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogError(ex, "TryReconnectSerialAsync");
+                return false;
+            }
+        }
+
         // ===================================================
         // DISCONNECT
         // ===================================================
 
-        /// <summary>Dừng timer, hủy reconnect loop và đóng kết nối TCP.</summary>
+        /// <summary>Dừng timer, hủy reconnect loop và đóng kết nối (TCP hoặc COM).</summary>
         public void Disconnect()
         {
             try
@@ -552,6 +731,7 @@ namespace ScanAndScale.Core.Drivers
                 _readTimer?.Dispose();
                 _readTimer = null;
 
+                // Nhánh TCP
                 _socket?.Close();
                 _socket = null;
 
@@ -559,12 +739,34 @@ namespace ScanAndScale.Core.Drivers
                 _tcpClient?.Dispose();
                 _tcpClient = null;
 
+                // Nhánh COM
+                ClosePort();
+
                 SetDataValue(new DataValue(DriverStatus.Disconnected, null));
                 LogInfo("ScaleDriver đã ngắt kết nối.");
             }
             catch (Exception ex)
             {
                 LogError(ex, "Disconnect");
+            }
+        }
+
+        /// <summary>Đóng và giải phóng <see cref="_serialPort"/> nếu đang mở. An toàn khi gọi nhiều lần.</summary>
+        private void ClosePort()
+        {
+            try
+            {
+                if (_serialPort == null) return;
+                if (_serialPort.IsOpen) _serialPort.Close();
+                _serialPort.Dispose();
+            }
+            catch (Exception ex)
+            {
+                LogError(ex, "ClosePort");
+            }
+            finally
+            {
+                _serialPort = null;
             }
         }
 

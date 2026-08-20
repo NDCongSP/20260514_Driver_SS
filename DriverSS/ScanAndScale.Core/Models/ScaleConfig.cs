@@ -41,21 +41,51 @@ namespace ScanAndScale.Core.Models
     }
 
     /// <summary>
-    /// Cấu hình kết nối TCP/IP và xử lý dữ liệu cho Scale Driver.
+    /// Kiểu kết nối vật lý tới cân điện tử.
+    /// </summary>
+    public enum ScaleConnectionType
+    {
+        /// <summary>
+        /// Kết nối qua TCP/IP — hoặc cân có cổng Ethernet trực tiếp, hoặc (phổ biến
+        /// hơn) cân xuất RS232 qua bộ chuyển đổi Serial-to-Ethernet. Mặc định — giữ
+        /// nguyên hành vi cũ, KHÔNG đổi cấu hình nào đang chạy ngoài thực tế.
+        /// </summary>
+        Tcp,
+
+        /// <summary>
+        /// Kết nối trực tiếp qua cổng COM (RS232 cắm thẳng vào máy tính, hoặc
+        /// USB-to-Serial), không qua bộ chuyển đổi TCP. Dùng <see cref="ScaleConfig.ComPort"/>
+        /// và <see cref="ScaleConfig.BaudRate"/>.
+        /// </summary>
+        Com
+    }
+
+    /// <summary>
+    /// Cấu hình kết nối (TCP/IP hoặc COM) và xử lý dữ liệu cho Scale Driver.
     /// <para>
-    /// Cân điện tử kết nối qua mạng LAN (Ethernet). Driver kết nối TCP
-    /// rồi đọc liên tục theo chu kỳ <see cref="TimeScanMs"/>.
-    /// Dữ liệu thô được parse bởi DLL model cân (Scale_DIGI.dll, v.v.).
+    /// Cân điện tử có thể kết nối theo 2 cách, chọn qua <see cref="ConnectionType"/>:
+    /// (1) TCP/IP — qua mạng LAN hoặc bộ chuyển đổi RS232-to-TCP (IP/Port);
+    /// (2) COM — cắm trực tiếp cổng Serial/USB-to-Serial (ComPort/BaudRate).
+    /// Dù kết nối kiểu nào, driver đều đọc liên tục theo chu kỳ <see cref="TimeScanMs"/>
+    /// và parse dữ liệu thô bằng DLL model cân (Scale_DIGI.dll, v.v.) — không phụ
+    /// thuộc vào kiểu kết nối.
     /// </para>
     /// </summary>
     public class ScaleConfig
     {
         /// <summary>
         /// Bật/tắt Scale Driver.
-        /// Nếu false, sẽ không kết nối TCP.
+        /// Nếu false, sẽ không kết nối (dù TCP hay COM).
         /// Mặc định: true.
         /// </summary>
         public bool Enable { get; set; } = true;
+
+        /// <summary>
+        /// Kiểu kết nối tới cân: TCP/IP hay COM trực tiếp.
+        /// Mặc định: <see cref="ScaleConnectionType.Tcp"/> — giữ tương thích ngược,
+        /// các cấu hình cũ (chỉ set IP/Port) không cần đổi gì vẫn chạy như trước.
+        /// </summary>
+        public ScaleConnectionType ConnectionType { get; set; } = ScaleConnectionType.Tcp;
 
         /// <summary>
         /// Chỉ đọc — nếu true không cho phép nhập tay trên UI.
@@ -72,9 +102,25 @@ namespace ScanAndScale.Core.Models
 
         /// <summary>
         /// Cổng TCP của cân. Hầu hết cân dùng Telnet port 23.
+        /// Chỉ dùng khi <see cref="ConnectionType"/> = Tcp.
         /// Mặc định: 23.
         /// </summary>
         public int Port { get; set; } = 23;
+
+        /// <summary>
+        /// Tên cổng COM (ví dụ: "COM3") khi cân cắm trực tiếp qua Serial/USB-to-Serial.
+        /// Chỉ dùng khi <see cref="ConnectionType"/> = Com.
+        /// Mặc định: "COM1".
+        /// </summary>
+        public string ComPort { get; set; } = "COM1";
+
+        /// <summary>
+        /// Baud rate cổng COM — phải khớp với cấu hình vật lý của cân (thường in trên
+        /// nhãn máy hoặc tài liệu kỹ thuật, ví dụ 9600, 4800, 2400).
+        /// Chỉ dùng khi <see cref="ConnectionType"/> = Com.
+        /// Mặc định: 9600.
+        /// </summary>
+        public int BaudRate { get; set; } = 9600;
 
         /// <summary>
         /// Chu kỳ đọc dữ liệu từ cân (milliseconds).
